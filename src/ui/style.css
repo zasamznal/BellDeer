@@ -85,7 +85,9 @@
 
 /* ---------------------------------------------------------------- screens */
 #screen { position: fixed; inset: 0; display: grid; place-items: center; color: var(--ink); font-size: var(--u); background: rgba(22, 24, 31, 0.5); }
-#screen.title { background: linear-gradient(180deg, rgba(12, 16, 24, 0.25), rgba(12, 16, 24, 0.72)); }
+#screen.title { background: linear-gradient(90deg, rgba(10, 14, 22, 0.78), rgba(10, 14, 22, 0.35) 55%, rgba(10, 14, 22, 0) 80%); place-items: center start; }
+#screen.title .box { justify-items: start; text-align: left; margin-left: clamp(16px, 7vw, 120px); max-width: min(56vw, 44em); }
+#screen.title .btns { justify-content: flex-start; }
 #screen.draft { background: rgba(34, 34, 42, 0.42); }
 #screen.dead { background: rgba(14, 6, 6, 0.72); }
 .box { display: grid; justify-items: center; gap: calc(var(--u) * 0.9); text-align: center; max-width: min(92vw, 62em); padding: var(--u); }

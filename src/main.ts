@@ -33,6 +33,7 @@ class App {
   private lmb = false;
   private freeLook = NOLOCK;
   private releasing = false;
+  private lockPromise = false;
   private acc = 0;
   private last = performance.now();
   private now = 0;
@@ -133,8 +134,8 @@ class App {
       this.releasing = false;
     });
     document.addEventListener('pointerlockerror', () => {
-      // Sandboxed iframe without pointer-lock permission: fall back to free mouse look.
-      this.freeLook = true;
+      // Browsers without the promise form give no reason; assume the lock is unavailable.
+      if (!this.lockPromise) this.freeLook = true;
     });
   }
 
@@ -147,7 +148,15 @@ class App {
     if (this.freeLook || document.pointerLockElement === this.canvas) return;
     try {
       const r = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
-      if (r && typeof r.catch === 'function') r.catch(() => (this.freeLook = this.freeLook || !document.hasFocus()));
+      if (r && typeof r.catch === 'function') {
+        this.lockPromise = true;
+        // A sandboxed iframe without pointer-lock permission: fall back to free mouse look.
+        // (NotAllowedError only means "click again", e.g. right after Esc.)
+        r.catch((e: unknown) => {
+          const name = (e as { name?: string })?.name;
+          if (name === 'SecurityError' || name === 'NotSupportedError') this.freeLook = true;
+        });
+      }
     } catch {
       this.freeLook = true;
     }
@@ -509,7 +518,7 @@ class App {
         case 'duskStep':
           a.deerStep(e.x, e.z, false);
           a.deerStep(e.x, e.z, false);
-          hud.subtitle(t('sSteps', { d: hud.dirWord(w, e.x, e.z) }), now);
+          hud.subtitle(t('sSteps', { d: hud.dirWord(w, e.x, e.z) }), now, false, 'steps');
           break;
         case 'dawn':
           a.dawn();
@@ -551,7 +560,7 @@ class App {
           const d = Math.hypot(e.x - pl.x, e.z - pl.z);
           if (d < 20 && now - this.stepSubAt > 3) {
             this.stepSubAt = now;
-            hud.subtitle(t(e.run ? 'sRun' : 'sSteps', { d: hud.dirWord(w, e.x, e.z) }), now, e.run);
+            hud.subtitle(t(e.run ? 'sRun' : 'sSteps', { d: hud.dirWord(w, e.x, e.z) }), now, e.run, 'steps');
           }
           break;
         }
@@ -610,9 +619,6 @@ class App {
       }
       if (guard >= 5) this.acc = 0;
       this.tips();
-    } else if (this.mode === 'title') {
-      // Slow look-around on the title.
-      this.yaw += dt * 0.03;
     }
 
     const alpha = this.simActive && this.mode === 'play' ? this.acc / DT : 1;
@@ -630,7 +636,10 @@ class App {
       sprint: pl.sprinting,
       active: this.mode !== 'pause',
     });
+    this.view.titleMode = this.mode === 'title' || this.mode === 'session';
     this.view.update(w, alpha, dt, this.yaw, this.pitch);
+    // Playing without the mouse captured (lock refused right after Esc): say how to get it back.
+    if (this.mode === 'play' && this.simActive && !this.freeLook && document.pointerLockElement !== this.canvas) this.hud.setHint(t('clickToPlay'), this.now, 0.3);
     if (this.view.lowQuality && !this.lowNoted && !this.store.profile.settings.lowQuality && !params.has('low')) {
       this.lowNoted = true;
       this.hud.toast(t('tLow'));

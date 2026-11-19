@@ -41,7 +41,7 @@ const SKY = {
   // Anxious day: ash-lilac sky #86788A, fog 18–40 m.
   day: sky('#6c6079', '#96848f', '#86788a', 18, 40, '#cdbdc8', '#8d776c', 2.7, '#ffbe98', 1.5, 0.03),
   // Night: blue-black fog 10–27 m with a steel band behind silhouettes.
-  night: sky('#0a1220', '#2c4261', '#1b2b45', 10, 27, '#5f84b8', '#1c2740', 1.35, '#9dbbe2', 0.95, 0.4),
+  night: sky('#0a1220', '#34507a', '#263a58', 10, 27, '#5f84b8', '#1a2438', 1.2, '#9dbbe2', 0.9, 0.75),
   dawn: sky('#5a5270', '#c79aa2', '#8f8094', 16, 38, '#c2acbf', '#7a6466', 2.2, '#ffc3a0', 0.9, 0.08),
 };
 
@@ -112,6 +112,8 @@ export class SceneView {
   private frameAvg = 16;
   private slowFor = 0;
   lowQuality = false;
+  /** Title screen: night hero shot across the fire with the Deer on the trail. */
+  titleMode = false;
   settings: ViewSettings = { shake: true, flash: true };
   /** 0..1 screen flash requested by the view (hit, flare); the HUD draws it. */
   hitPulse = 0;
@@ -233,10 +235,10 @@ export class SceneView {
     const bg = new THREE.ConeGeometry(1, 1, 16, 1, true);
     bg.translate(0, -0.5, 0);
     bg.rotateX(Math.PI / 2);
-    this.beam = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: '#b9d2ff', transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+    this.beam = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: '#b9d2ff', transparent: true, opacity: 0.05, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     this.beam.position.set(-0.22, -0.22, -0.62);
     this.beam.rotation.x = -0.05;
-    this.beam.scale.set(1.9, 1.9, 9);
+    this.beam.scale.set(1.0, 1.0, 9);
     cam.add(this.beam);
   }
 
@@ -473,7 +475,12 @@ export class SceneView {
       target = SKY.dawn;
       mix = 1;
     }
-    const k = 1 - Math.exp(-dt * 1.6);
+    const title = this.titleMode;
+    if (title) {
+      target = SKY.night;
+      mix = 1;
+    }
+    const k = 1 - Math.exp(-dt * (title ? 6 : 1.6));
     const c = this.cur;
     const blend = (cur: THREE.Color, a: THREE.Color, b: THREE.Color) => cur.lerp(tmpC.copy(a).lerp(b, mix), k);
     const base = SKY.day;
@@ -500,7 +507,7 @@ export class SceneView {
     this.hemi.intensity = c.hemi;
     this.sun.color.copy(c.sun);
     this.sun.intensity = c.sunI;
-    const night = s.phase === 'day' ? smooth(46, 60, s.t) : s.phase === 'night' || s.phase === 'deathOffer' || s.phase === 'end' ? 1 : 0;
+    const night = title ? 1 : s.phase === 'day' ? smooth(46, 60, s.t) : s.phase === 'night' || s.phase === 'deathOffer' || s.phase === 'end' ? 1 : 0;
     this.sun.position.set(lerp(30, 20, night), lerp(14, 30, night), lerp(-40, -38, night));
     (this.moon.material as THREE.MeshBasicMaterial).opacity = night;
     (this.sunDisc.material as THREE.MeshBasicMaterial).opacity = (1 - night) * (s.phase === 'draft' || s.phase === 'victory' ? 0.5 : 0.9);
@@ -609,8 +616,17 @@ export class SceneView {
     const bobY = Math.sin(this.bob) * 0.035 * Math.min(1, speed / 4);
     this.shakeT = Math.max(0, this.shakeT - dt);
     const sh = this.settings.shake ? this.shakeT * 0.16 : 0;
-    this.camera.position.set(px + (Math.random() - 0.5) * sh, RULES.world.eyeHeight + bobY + (Math.random() - 0.5) * sh, pz + (Math.random() - 0.5) * sh);
-    this.camera.rotation.set(pitch, yaw, Math.sin(this.bob * 0.5) * 0.006 * Math.min(1, speed / 4) + (this.settings.shake ? this.shakeT * 0.1 * Math.sin(t * 50) : 0), 'YXZ');
+    const post = w.forest.posts[0];
+    const postA = Math.atan2(post.z, post.x);
+    if (title) {
+      const a = postA + Math.PI + 0.55 + Math.sin(t * 0.11) * 0.22;
+      this.camera.position.set(Math.cos(a) * 3.4, 1.75, Math.sin(a) * 3.4);
+      // Aim left of the Deer so it stands in the right third, clear of the menu column.
+      this.camera.lookAt(Math.cos(postA - 0.5) * 6, 1.9, Math.sin(postA - 0.5) * 6);
+    } else {
+      this.camera.position.set(px + (Math.random() - 0.5) * sh, RULES.world.eyeHeight + bobY + (Math.random() - 0.5) * sh, pz + (Math.random() - 0.5) * sh);
+      this.camera.rotation.set(pitch, yaw, Math.sin(this.bob * 0.5) * 0.006 * Math.min(1, speed / 4) + (this.settings.shake ? this.shakeT * 0.1 * Math.sin(t * 50) : 0), 'YXZ');
+    }
     this.hitPulse = Math.max(0, this.hitPulse - dt * 1.8);
 
     // --- view model
@@ -618,18 +634,19 @@ export class SceneView {
     const chopping = pl.chop > 0;
     const sw = chopping ? Math.sin(Math.min(1, ((pl.chop % 0.5) / 0.5) * 1.15) * Math.PI) : 0;
     const sway = Math.sin(this.bob) * 0.012;
-    this.axe.position.set(0.31 - sw * 0.2 + sway, -0.2 + Math.abs(Math.cos(this.bob)) * 0.012 + sw * 0.06, -0.56 - sw * 0.1);
+    this.axe.position.set(0.37 - sw * 0.24 + sway, -0.25 + Math.abs(Math.cos(this.bob)) * 0.012 + sw * 0.06, -0.56 - sw * 0.1);
     this.axe.rotation.set(-0.22 - sw * 0.9, 0.42 + sw * 0.3, -0.16 + sw * 0.8);
-    const holdLight = pl.lightOn;
+    const holdLight = pl.lightOn && !title;
+    this.axe.visible = !title;
     this.lightModel.visible = holdLight;
     this.lightModel.position.set(-0.22 + sway, -0.25, -0.46);
     this.lightModel.rotation.set(-0.05, -0.1, 0);
-    this.torchModel.visible = pl.torch > 0;
+    this.torchModel.visible = pl.torch > 0 && !title;
     this.torchModel.position.set(-0.34 + sway, -0.3, -0.5);
     this.torchModel.rotation.set(0.1, 0, 0.12);
     this.torchModel.children[1].scale.setScalar(0.85 + 0.25 * Math.sin(t * 17));
     this.spot.distance = w.mods.beamRange * 1.25;
-    this.spot.intensity = holdLight ? 70 * (0.5 + 0.5 * Math.min(1, pl.battery / 12)) : 0;
+    this.spot.intensity = holdLight ? 46 * (0.5 + 0.5 * Math.min(1, pl.battery / 12)) : 0;
     this.beam.visible = holdLight && night > 0.3;
     this.torchLight.intensity = pl.torch > 0 ? 9 * (0.85 + 0.15 * Math.sin(t * 15)) : 0;
     this.handLight.intensity = 0.2 + 0.5 * night;
@@ -641,7 +658,23 @@ export class SceneView {
     const d = s.deer;
     const dv = this.deer;
     dv.root.visible = d.mode !== 'hidden' && s.phase !== 'day' && s.phase !== 'draft' && s.phase !== 'victory';
-    if (dv.root.visible) {
+    if (title) {
+      // The approved frame: the Bell-stag stands on the trail just beyond the ember ring.
+      dv.root.visible = true;
+      const r = Math.max(R, 4) + 2.6;
+      dv.root.position.set(Math.cos(postA) * r, 0, Math.sin(postA) * r);
+      dv.root.rotation.y = Math.atan2(-Math.cos(postA), -Math.sin(postA)) + Math.sin(t * 0.3) * 0.15;
+      const p = this.pose;
+      p.stage = 0;
+      p.gait = 0;
+      p.crouch = 0.12 + 0.06 * Math.sin(t * 0.7);
+      p.swing = 0;
+      p.stun = 0;
+      p.hop = 0;
+      p.bell = Math.sin(t * 1.7) * 0.12;
+      dv.setStage(0);
+      dv.apply(p);
+    } else if (dv.root.visible) {
       const dx = lerp(w.prev.dx, d.x, alpha);
       const dz = lerp(w.prev.dz, d.z, alpha);
       const moved = Math.hypot(d.x - w.prev.dx, d.z - w.prev.dz) * 30;

@@ -59,6 +59,7 @@ export interface UiHandlers {
 }
 
 interface Sub {
+  kind: string;
   text: string;
   until: number;
   alarm: boolean;
@@ -132,14 +133,17 @@ export class Hud {
 
   // ------------------------------------------------------------ transient text
 
-  subtitle(text: string, now: number, alarm = false): void {
+  /** `kind` groups lines that replace each other (e.g. steps heard from a new side). */
+  subtitle(text: string, now: number, alarm = false, kind = text): void {
     if (!this.showSubs) return;
-    const last = this.subs[this.subs.length - 1];
-    if (last && last.text === text) {
-      last.until = now + 2.2;
+    const same = this.subs.find((x) => x.kind === kind);
+    if (same) {
+      same.text = text;
+      same.alarm = alarm;
+      same.until = now + 2.2;
       return;
     }
-    this.subs.push({ text, until: now + 2.4, alarm });
+    this.subs.push({ text, until: now + 2.4, alarm, kind });
     if (this.subs.length > 3) this.subs.shift();
   }
   toast(text: string): void {
@@ -396,7 +400,7 @@ export class Hud {
       cls = 'dead';
       html =
         `<div class="box"><h1>${t('runOver', { n: s.night })}</h1><p>${t('survivedNights', { n: s.stats.nightsSurvived })}</p><p>${t('cause')}</p>` +
-        `<p>${t('tagsOut', { n: s.stats.tagsBanked })}</p>${this.buildChips(s)}<div class="btns"><button class="primary" data-act="again">${t('again')}</button><button data-act="title">${t('title')}</button></div></div>`;
+        `<p>${t('tagsOut', { n: s.stats.tagsBanked })}</p>${this.buildChips(s)}<div class="btns"><button class="primary" data-act="again">${t('again')}</button><button data-act="title">${t('menu')}</button></div></div>`;
     } else if (kind === 'victory' && s) {
       cls = 'draft';
       html =
