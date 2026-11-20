@@ -224,7 +224,7 @@ export class IdeasUi {
     if (showOmen) {
       this.set(this.omenEl, 'omen', t('omen_' + I.omen));
       if (this.cache.omenCls !== I.omen) this.omenEl.className = this.cache.omenCls = I.omen;
-      const key = `${this.phaseEl.textContent}|${window.innerWidth}`;
+      const key = `${this.phaseEl.textContent}|${window.innerWidth}|${document.fonts?.status ?? ''}`;
       if (this.cache.omenAt !== key) {
         this.cache.omenAt = key;
         this.omenEl.style.marginLeft = `${this.phaseEl.offsetWidth / 2}px`;
