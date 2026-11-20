@@ -45,7 +45,7 @@ addStrings({
     dLureScrap: 'No scrap for a tin',
     dLureDay: 'Save the tin for the night',
     // 8. ember blow
-    hBlow: 'blow on the embers +8',
+    hBlow: 'blow on the embers +10',
     tBlow: 'The embers catch: +{n}',
     // 9. score
     heat: 'HEAT',
@@ -101,7 +101,7 @@ addStrings({
     sLurePulled: 'Он поворачивает на звон',
     dLureScrap: 'Нет лома на жестянку',
     dLureDay: 'Жестянку побереги до ночи',
-    hBlow: 'раздуть угли +8',
+    hBlow: 'раздуть угли +10',
     tBlow: 'Угли занялись: +{n}',
     heat: 'ЖАР',
     scoreLine: 'Жар: {n}',

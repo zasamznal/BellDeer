@@ -1188,7 +1188,7 @@ describe('blow on the embers', () => {
     return { w, s, I: s.ideas };
   }
 
-  it('weak fire, empty pack: holding E for 1.5 s adds 8 fuel at once and the circle is bright again from 24', () => {
+  it('weak fire, empty pack: holding E for 1.5 s adds 10 fuel at once and the circle is bright again from 24', () => {
     const { w, s, I } = weak(24);
     tick(w, atFire(w));
     expect(w.focus).toMatchObject({ kind: 'fire', info: 'blow', usable: true });
@@ -1200,7 +1200,7 @@ describe('blow on the embers', () => {
     expect(s.bright).toBe(false);
     const f1 = s.fuel;
     ev = run(w, 0.1, atFire(w, { blow: true }));
-    expect(ev).toContainEqual({ type: 'blow', gain: 8 });
+    expect(ev).toContainEqual({ type: 'blow', gain: IDEAS.blow.fuel });
     expect(ev).toContainEqual({ type: 'fireBright' });
     expect(s.fuel).toBeCloseTo(f1 - burnRate('night', 1) * 0.1 + IDEAS.blow.fuel, 6);
     expect(s.fuel).toBeGreaterThanOrEqual(RULES.fire.brightAt);

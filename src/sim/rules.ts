@@ -254,7 +254,7 @@ export const IDEAS: IdeasRules = {
   resin: { logs: 3 },
   lureRule: { cost: 1, range: 14, cooldown: 3, pullRadius: 16, speedMult: 1.5, lookSeconds: 2, giveUpSeconds: 9 },
   challenge: { firstNight: 2, lateFeedSecond: 45, outsideSeconds: 20, handSize: 4 },
-  blow: { holdSeconds: 1.5, fuel: 8 },
+  blow: { holdSeconds: 1.5, fuel: 10 },
   points: { outsideSecond: 1, tag: 50, night: 100, dodge: 30, trap: 40, tracks: 25, resin: 20, challenge: 80 },
   nearMiss: 2.6,
   slow: { scale: 0.35, seconds: 0.6, easeSeconds: 0.3, cooldown: 4 },
