@@ -17,13 +17,19 @@ export function imageUrl(file: string): string | null {
 }
 
 let loader: GLTFLoader | null = null;
+const cache = new Map<string, Promise<GLTF | null>>();
 
-/** Load a bundled GLB; resolves to null when the asset is not part of the build or fails to parse. */
+/** Load a bundled GLB once; resolves to null when the asset is not part of the build or fails to parse. */
 export function loadModel(name: string): Promise<GLTF | null> {
   const url = modelUrl(name);
   if (!url) return Promise.resolve(null);
-  loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-  return new Promise((resolve) => loader!.load(url, resolve, undefined, () => resolve(null)));
+  let hit = cache.get(name);
+  if (!hit) {
+    loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    hit = new Promise((resolve) => loader!.load(url, resolve, undefined, () => resolve(null)));
+    cache.set(name, hit);
+  }
+  return hit;
 }
 
 /**
@@ -64,6 +70,8 @@ export function fitHeight(root: THREE.Object3D, height: number): void {
   root.position.y -= b2.min.y;
 }
 
+const EMPTY = new THREE.BufferGeometry();
+
 export interface Fit {
   scale: number;
   position: [number, number, number];
@@ -79,13 +87,16 @@ export interface Fit {
 export async function upgradeMesh(host: THREE.Mesh, name: string, fit: Fit, opts: { flat?: boolean } = {}): Promise<THREE.Object3D | null> {
   const gltf = await loadModel(name);
   if (!gltf) return null;
-  const model = gltf.scene;
-  toLambert(model, opts);
+  // The first use converts the materials; later hosts get clones that share geometry and material.
+  if (!gltf.userData.lambert) {
+    toLambert(gltf.scene, opts);
+    gltf.userData.lambert = true;
+  }
+  const model = gltf.scene.clone(true);
   model.scale.setScalar(fit.scale);
   model.position.set(...fit.position);
   model.rotation.set(fit.rotation[0], fit.rotation[1], fit.rotation[2], 'YXZ');
-  host.geometry.dispose();
-  host.geometry = new THREE.BufferGeometry();
+  host.geometry = EMPTY;
   host.add(model);
   return model;
 }

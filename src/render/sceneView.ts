@@ -10,11 +10,18 @@ import type { World } from '../sim/world';
 import { DeerModel, type DeerPose } from './deerModel';
 import { Builder, M, rnd, rr, srand, woodMaterial } from './geo';
 import * as P from './props';
-import { type Fit, upgradeMesh } from './assets';
+import { type Fit, loadModel, upgradeMesh } from './assets';
+import { RiggedDeer } from './deerRig';
 
 // How the generated models sit inside the procedural hosts they replace (host space:
 // handle along +Y, blade toward -X, forearm toward the camera).
 const AXE_FIT: Fit = { scale: 0.4, position: [0.02, 0.1, 0], rotation: [0, -1.03, 0] };
+// The flashlight model lies along +X with the lens at +X; the host points down -Z.
+const LIGHT_FIT: Fit = { scale: 0.25, position: [-0.03, -0.02, 0.1], rotation: [0, Math.PI / 2, 0] };
+// Props stand on y = 0 in host space. The post is turned so its hook sits where the tag hangs (x = +0.38).
+const TRAP_FIT: Fit = { scale: 0.36, position: [0, 0.06, 0], rotation: [0, 0, 0] };
+const POST_FIT: Fit = { scale: 0.92, position: [-0.1, 0.875, 0], rotation: [0, Math.PI, 0] };
+const BENCH_FIT: Fit = { scale: 0.6, position: [0, 0.42, 0], rotation: [0, 0, 0] };
 
 interface Sky {
   top: THREE.Color;
@@ -167,6 +174,8 @@ export class SceneView {
     this.buildViewModel();
     this.deer.root.visible = false;
     this.scene.add(this.deer.root);
+    // Generated Bell-stag, when bundled: one rigid-skinned mesh driven by the same poses.
+    void loadModel('deer').then((g) => g && this.deer.adoptRig(new RiggedDeer(g.scene, this.deer.rim)));
 
     this.trapGhost = new THREE.Mesh(this.trapGeo, new THREE.MeshBasicMaterial({ color: '#9fe0a0', transparent: true, opacity: 0.55, depthWrite: false }));
     this.trapGhost.visible = false;
@@ -224,6 +233,7 @@ export class SceneView {
     void upgradeMesh(this.axe, 'axe-hand', AXE_FIT);
     this.lightModel = new THREE.Mesh(P.flashlightGeometry(), this.wood);
     this.lightModel.scale.setScalar(0.85);
+    void upgradeMesh(this.lightModel, 'light-hand', LIGHT_FIT);
     cam.add(this.lightModel);
     this.torchModel = new THREE.Group();
     this.torchModel.add(new THREE.Mesh(P.torchGeometry(), this.wood));
@@ -359,7 +369,7 @@ export class SceneView {
       g.add(o);
       return o;
     };
-    at(new THREE.Mesh(P.benchGeometry(), this.wood), f.bench.x, f.bench.z, 0.25);
+    void upgradeMesh(at(new THREE.Mesh(P.benchGeometry(), this.wood), f.bench.x, f.bench.z, 0.25), 'bench', BENCH_FIT);
     at(new THREE.Mesh(P.whiteSnagGeometry(), this.wood), f.whiteSnag.x, f.whiteSnag.z, 0.6);
 
     f.snags.forEach((n, i) => {
@@ -381,7 +391,7 @@ export class SceneView {
     f.posts.forEach((n) => {
       // The crossbar lies across the trail, so from camp the T is seen broadside with the tag beside it.
       const rot = Math.atan2(n.x, n.z);
-      at(new THREE.Mesh(postGeo, this.wood), n.x, n.z, rot);
+      void upgradeMesh(at(new THREE.Mesh(postGeo, this.wood), n.x, n.z, rot), 'post', POST_FIT);
       const mat = new THREE.MeshLambertMaterial({ color: P.PALETTE.tin, emissive: '#000000', flatShading: true });
       const tag = new THREE.Mesh(tagGeo, mat);
       tag.position.set(n.x + Math.cos(-rot) * 0.38, 1.35, n.z + Math.sin(-rot) * 0.38);
@@ -591,6 +601,7 @@ export class SceneView {
     });
     while (this.trapMeshes.length < s.traps.length) {
       const m = new THREE.Mesh(this.trapGeo, this.wood);
+      void upgradeMesh(m, 'trap', TRAP_FIT);
       this.scene.add(m);
       this.trapMeshes.push(m);
     }

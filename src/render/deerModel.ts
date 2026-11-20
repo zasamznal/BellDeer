@@ -402,7 +402,19 @@ export class DeerModel {
     }
   }
 
+  /** Swap the procedural boards for the generated, rigid-skinned model (same pose input). */
+  adoptRig(rig: { root: THREE.Object3D; apply(p: DeerPose): void }): void {
+    this.rig = rig;
+    this.body.visible = false;
+    this.root.add(rig.root);
+  }
+  private rig: { root: THREE.Object3D; apply(p: DeerPose): void } | null = null;
+
   apply(p: DeerPose): void {
+    if (this.rig) {
+      this.rig.apply(p);
+      return;
+    }
     const s = Math.sin(p.walk);
     const c = Math.cos(p.walk);
     const g = p.gait;
