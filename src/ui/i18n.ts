@@ -333,6 +333,12 @@ const ru: Dict = {
 };
 
 const dicts: Record<Lang, Dict> = { en, ru };
+
+/** Feature modules register their own strings here instead of editing the tables above. */
+export function addStrings(extra: Record<Lang, Dict>): void {
+  Object.assign(en, extra.en);
+  Object.assign(ru, extra.ru);
+}
 let lang: Lang = 'en';
 
 export function setLang(l: Lang): void {
