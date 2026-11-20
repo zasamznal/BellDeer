@@ -8,11 +8,12 @@
 
 import { type Forest, type V2, dist, generateForest, lineOfSight, rayObstacles, resolveCircle } from './forest';
 import { Rng, hashSeed } from './rng';
-import { CONTENT_VERSION, DT, GEN_VERSION, RULES, burnRate, fireRadius, stageForNight } from './rules';
+import { CONTENT_VERSION, DT, GEN_VERSION, IDEAS, RULES, burnRate, fireRadius, omenMods, stageForNight } from './rules';
 import { type Mods, computeMods } from './mods';
 import type { CacheState, Focus, Input, RunState, SimEvent } from './types';
 import { newDeer, resolveSwing, stepDeer, stunDeer } from './deer';
 import { dealHand } from './draft';
+import * as ideas from './ideas'; // [ideas] the ten additions; hook points below are marked the same way
 
 const P = RULES.player;
 /** Below this gain the fire counts as full and E spends nothing. */
@@ -43,6 +44,7 @@ export class World {
   rngCards: Rng;
 
   constructor(state: RunState) {
+    ideas.adoptIdeas(state); // [ideas] older saves get the new fields
     this.state = state;
     this.forest = generateForest(state.seed);
     this.mods = computeMods(state.cards);
@@ -123,10 +125,13 @@ export class World {
       deathReason: '',
       fedOnce: false,
       choppedOnce: false,
-      stats: { nightsSurvived: 0, tagsBanked: 0, cachesClaimed: 0, hunts: 0, logsChopped: 0, feeds: 0, activeSeconds: 0, seals: [] },
+      stats: { nightsSurvived: 0, tagsBanked: 0, cachesClaimed: 0, hunts: 0, logsChopped: 0, feeds: 0, activeSeconds: 0, seals: [], score: 0 },
       rng: { loot: hashSeed(seed, 'loot'), threat: hashSeed(seed, 'threat'), cards: hashSeed(seed, 'cards') },
+      ideas: ideas.newIdeas(), // [ideas]
     };
-    return new World(state);
+    const world = new World(state);
+    ideas.beginDayIdeas(world); // [ideas 3, 4] tracks and the resin pine of the first day
+    return world;
   }
 
   // ------------------------------------------------------------ queries
@@ -177,12 +182,13 @@ export class World {
     const s = this.state;
     if (s.phase !== 'day' && s.phase !== 'night') return;
     const pl = s.player;
+    const mark = this.events.length; // [ideas] events of this tick start here
     this.snapPrev();
     pl.yaw = input.yaw;
     pl.pitch = input.pitch;
 
     const acted =
-      input.mx !== 0 || input.mz !== 0 || input.chop || input.interact || input.trapHold || input.eat || input.torch || input.flare || input.light;
+      input.mx !== 0 || input.mz !== 0 || input.chop || input.interact || input.trapHold || input.eat || input.torch || input.flare || input.light || input.lure;
     if (!s.dayStarted) {
       if (!acted) {
         this.updateFocus();
@@ -205,6 +211,7 @@ export class World {
     if (s.phase === 'day') {
       const before = s.t - DT;
       if (before < 43 && s.t >= 43) this.emit({ type: 'dusk' });
+      if (before < 43 && s.t >= 43) ideas.duskIdeas(this); // [ideas 2, 6, 7] tonight's omen and challenge
       if (before < 55 && s.t >= 55) {
         const a = Math.atan2(-pl.z, -pl.x) + 0.3;
         this.emit({ type: 'duskStep', x: Math.cos(a) * 22, z: Math.sin(a) * 22 });
@@ -228,6 +235,7 @@ export class World {
       for (const t of s.traps) if (t.arm > 0) t.arm -= DT;
     }
     this.updateFocus();
+    ideas.afterStepIdeas(this, mark); // [ideas 3, 6, 9] score, challenges, found tracks
   }
 
   // ------------------------------------------------------------ player
@@ -255,7 +263,7 @@ export class World {
       chopping = true;
       const before = pl.chop;
       pl.chop += DT;
-      pl.noise = RULES.deer.hearChop;
+      pl.noise = RULES.deer.hearChop * (s.phase === 'night' ? omenMods(s.ideas.omen).chopNoise : 1); // [ideas 2]
       // An audible hit roughly every 0.5 s.
       if (Math.floor(before / 0.5) !== Math.floor(pl.chop / 0.5) || before === 0) this.emit({ type: 'chopHit', node: f.id });
       if (pl.chop >= m.chopSeconds) {
@@ -316,7 +324,7 @@ export class World {
       }
       resolveCircle(this.forest.obstacles, pl, RULES.world.playerRadius, RULES.world.radius - 0.6);
       const moved = Math.hypot(pl.x - ox, pl.z - oz);
-      pl.noise = Math.max(pl.noise, wantSprint ? m.hearRun : m.hearStep);
+      pl.noise = Math.max(pl.noise, (wantSprint ? m.hearRun : m.hearStep) * (s.phase === 'night' ? omenMods(s.ideas.omen).moveNoise : 1)); // [ideas 2]
       if (m.dynamo && s.phase === 'day' && pl.dynamoDay < 25) {
         pl.dynamoDist += moved;
         while (pl.dynamoDist >= 4 && pl.dynamoDay < 25) {
@@ -486,6 +494,10 @@ export class World {
       } else this.emit({ type: 'denied', why: 'flares' });
     }
 
+    // [ideas 5, 8] R throws a tin; E held on weak embers with an empty pack blows them up.
+    if (input.lure) ideas.throwLure(this);
+    fuelAdded += ideas.stepBlow(this, input);
+
     // Bank carried tags within 2 m of the fire at any brightness.
     if (pl.tags > 0 && Math.hypot(pl.x, pl.z) <= RULES.fire.bankRadius + 0.85) {
       const ch = this.chapterOf(s.night);
@@ -563,7 +575,8 @@ export class World {
     const s = this.state;
     const F = RULES.fire;
     const before = s.fuel;
-    s.fuel = clamp(s.fuel - burnRate(s.phase === 'night' ? 'night' : 'day', s.night) * DT + fuelAdded, 0, F.max);
+    const omenBurn = s.phase === 'night' ? omenMods(s.ideas.omen).burn : 1; // [ideas 2] wind / dead still
+    s.fuel = clamp(s.fuel - burnRate(s.phase === 'night' ? 'night' : 'day', s.night) * omenBurn * DT + fuelAdded, 0, F.max);
     // E01: once per night, the first fall to 24 F gives +14 before the brightness check.
     if (this.mods.ember && s.phase === 'night' && !s.emberUsed && before > F.weakAt && s.fuel <= F.weakAt) {
       s.emberUsed = true;
@@ -691,6 +704,7 @@ export class World {
     }
     consider('bench', 0, F.bench, 0.6, 'bench', true);
     this.focus = best;
+    ideas.blowFocus(this); // [ideas 8]
   }
 
   // ------------------------------------------------------------ phases
@@ -700,10 +714,12 @@ export class World {
     s.phase = 'night';
     s.t = 0;
     s.emberUsed = false;
+    ideas.beginNightIdeas(this); // [ideas] fresh night counters
     // Two caches on different posts, 14–17 m from the fire.
+    // [ideas 7] A bell night has three (22 / 40 / 58 s); the third gives scrap like the first.
     const order = this.rngLoot.shuffle(this.forest.posts.map((_, i) => i));
-    s.caches = RULES.cache.times.map(
-      (openAt, i): CacheState => ({ post: order[i], openAt, reward: i === 0 ? 'scrap' : 'flare', reveal: 0, revealed: false, status: 'pending' }),
+    s.caches = ideas.nightCacheTimes(this).map(
+      (openAt, i): CacheState => ({ post: order[i], openAt, reward: i === 1 ? 'flare' : 'scrap', reveal: 0, revealed: false, status: 'pending' }),
     );
     // E02: a free trap on the nearest free marked trail point 9–12 m from the fire.
     if (this.mods.autoTrap && s.traps.length < RULES.limits.placedTraps) {
@@ -718,7 +734,10 @@ export class World {
     // The Deer steps out of the fog on the far side of the clearing.
     const pl = s.player;
     const d = (s.deer = { ...newDeer(), nearMiss: s.deer.nearMiss });
-    const away = Math.atan2(-pl.z, -pl.x) + this.rngThreat.range(-0.5, 0.5);
+    // [ideas 3] With tracks it comes from the direction decided by day (the roll is kept so the threat stream does not shift).
+    const jitter = this.rngThreat.range(-0.5, 0.5);
+    const entry = ideas.entryAngle(this);
+    const away = entry === null ? Math.atan2(-pl.z, -pl.x) + jitter : entry + jitter * IDEAS.tracksRule.spawnJitter;
     const start = this.forest.nav.center(this.forest.nav.nearestFree({ x: Math.cos(away) * 22, z: Math.sin(away) * 22 }));
     d.x = start.x;
     d.z = start.z;
@@ -748,6 +767,7 @@ export class World {
     pl.battery = Math.min(RULES.flashlight.max, pl.battery + RULES.flashlight.dawnCharge);
     pl.dynamoDay = 0;
     this.replenish();
+    ideas.dawnIdeas(this); // [ideas 6, 7, 9] before the hand is dealt
     this.emit({ type: 'dawn', n: s.night });
     if (s.night >= RULES.cycle.lastNight) {
       s.phase = 'victory';
@@ -790,6 +810,7 @@ export class World {
     s.phase = 'day';
     s.t = 0;
     this.refreshMods();
+    ideas.beginDayIdeas(this); // [ideas] calm again; new tracks and resin pine
     this.syncRng();
     this.emit({ type: 'dayStart', n: s.night });
     this.emit({ type: 'save' });

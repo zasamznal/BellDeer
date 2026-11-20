@@ -1,6 +1,6 @@
 // DraftSystem (GDD §5): three different cards after nights 1–98.
 
-import { CARDS, CARD_BY_ID, type CardDef, RULES, type Rarity } from './rules';
+import { CARDS, CARD_BY_ID, type CardDef, IDEAS, RULES, type Rarity } from './rules';
 import type { World } from './world';
 
 const RARITIES: Rarity[] = ['common', 'rare', 'epic'];
@@ -39,10 +39,15 @@ export function dealHand(w: World, exclude: readonly string[]): string[] {
   const s = w.state;
   const hand: string[] = [];
   let pool = available(w, exclude);
-  for (let i = 0; i < 3; i++) {
+  // [ideas 6] A completed night challenge deals four cards (as many as the pool still has).
+  const size = s.ideas.dawnFour ? IDEAS.challenge.handSize : 3;
+  for (let i = 0; i < size; i++) {
+    // [ideas 7] After a bell night with a banked tag, slot one is rare or epic while any is left.
+    const fine = i === 0 && s.ideas.dawnRare ? pool.filter((c) => c.rarity !== 'common') : [];
+    const base = fine.length ? fine : pool;
     // From the second dawn on, slot one leans toward the tag of the last permanent pick.
-    const tagged = i === 0 && s.lastTag ? pool.filter((c) => c.tag === s.lastTag) : [];
-    const card = drawOne(w, tagged.length ? tagged : pool);
+    const tagged = i === 0 && s.lastTag ? base.filter((c) => c.tag === s.lastTag) : [];
+    const card = drawOne(w, tagged.length ? tagged : base);
     if (!card) break;
     hand.push(card.id);
     pool = pool.filter((c) => c.id !== card.id);

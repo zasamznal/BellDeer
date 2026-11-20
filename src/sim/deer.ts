@@ -7,7 +7,7 @@
 // Stage abilities inherit downwards; one special maneuver per attack.
 
 import { type V2, dist, lineOfSight, resolveCircle } from './forest';
-import { DT, RULES, huntSpeed, threatRate } from './rules';
+import { DT, IDEAS, RULES, huntSpeed, omenMods, threatRate } from './rules';
 import type { DeerState, Maneuver } from './types';
 import type { World } from './world';
 
@@ -48,6 +48,8 @@ export function newDeer(): DeerState {
     goalZ: 0,
     nearMiss: 99,
     search: null,
+    lure: null,
+    lureT: 0,
   };
 }
 
@@ -70,7 +72,8 @@ function perceives(w: World): boolean {
   const pl = w.state.player;
   const dd = dist(d, pl);
   if (dd <= pl.noise) return true;
-  return dd <= D.sight && lineOfSight(w.forest.obstacles, d, pl);
+  // [ideas 2] Fog shortens the sight to 15 m, a clear moon stretches it to 28 m.
+  return dd <= omenMods(w.state.ideas.omen).sight && lineOfSight(w.forest.obstacles, d, pl);
 }
 
 /** Walk toward a goal on the nav grid; the Deer brakes at the edge of bright light. */
@@ -206,7 +209,7 @@ export function stepDeer(w: World): void {
   // Threat: pressure of the dark. Frozen at zero while stunned or retreating.
   if (d.mode === 'stunned' || d.mode === 'retreat') d.threat = 0;
   else if (prot) d.threat = Math.max(0, d.threat - D.threatDecay * DT);
-  else d.threat = Math.min(100, d.threat + threatRate(n) * (pl.torch > 0 ? 0.5 : 1) * DT);
+  else d.threat = Math.min(100, d.threat + threatRate(n) * (pl.torch > 0 ? 0.5 : 1) * omenMods(s.ideas.omen).threat * DT); // [ideas 7] ×1.25 on a bell night
 
   const sees = perceives(w);
   if (sees) {
@@ -338,7 +341,7 @@ export function stepDeer(w: World): void {
         // Close in to arm's reach and hold there: the body stays in front of the player between swings.
         const hold = sees && !d.detour && dist(d, pl) <= HOLD_RANGE;
         if (hold) face(d, pl, 0.3);
-        const left = hold ? dist(d, pl) : moveToward(w, goal, huntSpeed(n));
+        const left = hold ? dist(d, pl) : moveToward(w, goal, huntSpeed(n) + omenMods(s.ideas.omen).hunt); // [ideas 7] +0.3 m/s on a bell night
         if (!sees && !searching && d.lostT >= D.lostSeconds && (left < 1.2 || d.lostT >= 9)) {
           startRetreat(w);
           break;
@@ -390,6 +393,40 @@ export function stepDeer(w: World): void {
       }
       break;
     }
+    case 'lured': {
+      // [ideas 5] Tin lure: walk to the clatter at 1.5× stalk speed, look around for 2 s, resume stalking.
+      const L = IDEAS.lureRule;
+      if (wantsHunt || !d.lure) {
+        d.lure = null;
+        d.lureT = 0;
+        if (wantsHunt) startCue(w, false);
+        else setMode(w, 'stalk');
+        break;
+      }
+      if (d.lureT <= 0) {
+        // Never into the bright circle: a tin inside it is watched from just beyond the rim.
+        let goal: V2 = d.lure;
+        const gr = Math.hypot(goal.x, goal.z);
+        const rim = w.radius + 1;
+        if (s.bright && gr < rim) {
+          const ax = gr > 0.05 ? goal.x / gr : d.x / (Math.hypot(d.x, d.z) || 1);
+          const az = gr > 0.05 ? goal.z / gr : d.z / (Math.hypot(d.x, d.z) || 1);
+          goal = { x: ax * rim, z: az * rim };
+        }
+        const left = moveToward(w, goal, D.stalkSpeed * L.speedMult);
+        if (left < 1.2 || d.timer >= L.giveUpSeconds) d.lureT = DT;
+      } else {
+        d.lureT += DT;
+        d.heading += Math.cos(d.lureT * 3.4) * 2.2 * DT; // head sweep, left and right
+        if (d.lureT >= L.lookSeconds) {
+          d.lure = null;
+          d.lureT = 0;
+          setMode(w, 'stalk');
+          d.orbitTimer = w.rngThreat.range(6, 10);
+        }
+      }
+      break;
+    }
   }
 
   // A feed can grow the bright circle over a standing Deer: it steps back to the rim at once.
@@ -401,6 +438,34 @@ export function stepDeer(w: World): void {
     const stride = d.mode === 'hunt' || d.mode === 'lunge' ? 0.36 : 0.62;
     if (Math.floor((d.timer - DT) / stride) !== Math.floor(d.timer / stride)) w.emit({ type: 'deerStep', x: d.x, z: d.z, run: stride < 0.5 });
   }
+}
+
+/**
+ * [ideas 5] A tin clatters at `at`. Returns true when it changes where the Deer goes.
+ * Patrol / stalk (or already lured): it walks there, unless it perceives a player
+ * who is outside protection — a player inside the light is seen but out of reach,
+ * so the clatter wins. Hunt without a sighting: the spot becomes the last known point.
+ * Never during a cue, feint, swing, lunge, recovery, stun or retreat.
+ */
+export function lureDeer(w: World, at: V2): boolean {
+  const d = w.state.deer;
+  if (d.mode === 'hidden' || dist(d, at) > IDEAS.lureRule.pullRadius) return false;
+  if (d.mode === 'patrol' || d.mode === 'stalk' || d.mode === 'lured') {
+    if (!w.playerProtected && perceives(w)) return false;
+    setMode(w, 'lured');
+    d.lure = { x: at.x, z: at.z };
+    d.lureT = 0;
+    d.path.length = 0;
+    return true;
+  }
+  if (d.mode === 'hunt' && d.chargeLeft <= 0 && !perceives(w)) {
+    d.lastKnown = { x: at.x, z: at.z };
+    d.lostT = 0;
+    d.search = null;
+    d.detour = null;
+    return true;
+  }
+  return false;
 }
 
 /** Posts to check during a blind hunt: an open cache first, then by distance. */

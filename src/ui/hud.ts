@@ -8,6 +8,7 @@ import { canReroll } from '../sim/draft';
 import type { Profile } from '../platform/store';
 import { cardArtHtml } from './cardArt';
 import { getLang, statLabel, t, val } from './i18n';
+import { decorateScreen, ideasPrompt } from './ideasUi'; // [ideas] ember-blow prompt, score and dawn lines on the screens
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -249,6 +250,7 @@ export class Hud {
         text = t('hBench');
       }
     }
+    ({ key, text, off, prog } = ideasPrompt(w, { key, text, off, prog })); // [ideas 8] "hold E · blow on the embers +8"
     const ghost = w.trapGhost;
     if (ghost && !ghost.ok && pl.trapHold >= 0) {
       // Say why the trap cannot be set instead of failing silently.
@@ -424,5 +426,6 @@ export class Hud {
     }
     el.className = cls;
     el.innerHTML = html;
+    decorateScreen(kind, el, w, profile); // [ideas] score, dawn rewards, four-card layout, extra controls
   }
 }

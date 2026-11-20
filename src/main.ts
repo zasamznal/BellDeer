@@ -12,6 +12,8 @@ import { World } from './sim/world';
 import { loadFonts } from './ui/fonts';
 import { type Action, Hud, type ScreenKind } from './ui/hud';
 import { detectLang, getLang, setLang, t } from './ui/i18n';
+import './ui/ideasStrings'; // [ideas] strings of the gameplay additions
+import { IdeasUi } from './ui/ideasUi'; // [ideas] pulse, omen / challenge lines, score, hints, slow motion
 import { saveResultCard } from './ui/resultCard';
 
 const params = new URLSearchParams(location.search);
@@ -25,6 +27,7 @@ class App {
   private audio = new Audio();
   private view = new SceneView(this.canvas);
   private hud: Hud;
+  private ideas: IdeasUi; // [ideas]
   world!: World;
   private mode: 'title' | 'play' | 'pause' | 'session' = 'title';
   private chapterPanel = false;
@@ -69,6 +72,7 @@ class App {
       },
     });
     this.hud.showSubs = st.subtitles;
+    this.ideas = new IdeasUi(this.hud, this.audio, this.view, this.store); // [ideas]
 
     // The title shows the real clearing: the saved run if there is one, otherwise a fresh forest.
     const saved = this.store.run;
@@ -226,6 +230,9 @@ class App {
       case 'KeyG':
         this.edge.flare = true;
         break;
+      case 'KeyR': // [ideas 5] tin lure
+        this.edge.lure = true;
+        break;
       case 'KeyP':
         this.pause();
         break;
@@ -242,6 +249,7 @@ class App {
     i.sprint = k.has('ShiftLeft') || k.has('ShiftRight');
     i.chop = this.lmb;
     i.trapHold = k.has('KeyQ');
+    i.blow = k.has('KeyE'); // [ideas 8] E held: blow on the embers
     i.yaw = this.yaw;
     i.pitch = this.pitch;
     this.edge = emptyInput();
@@ -374,7 +382,7 @@ class App {
           headline: victory ? t('victory') : t('runOver', { n: s.night }),
           subline: t('survivedNights', { n: s.stats.nightsSurvived }),
           cause: victory ? t('victoryText') : t('cause'),
-          tagsLine: t('tagsOut', { n: s.stats.tagsBanked }),
+          tagsLine: `${t('tagsOut', { n: s.stats.tagsBanked })} · ${t('scoreLine', { n: s.stats.score })}`, // [ideas 9] score on the card
           buildLabel: t('build'),
           build: s.cards.map((id) => t(id)),
           footer: t('title'),
@@ -438,6 +446,7 @@ class App {
     const s = this.world.state;
     const p = this.store.profile;
     p.best = Math.max(p.best, reason === 'victory' ? 99 : s.night);
+    p.bestScore = Math.max(p.bestScore, s.stats.score); // [ideas 9]
     p.runs++;
     p.nights += s.stats.nightsSurvived;
     for (const seal of s.stats.seals) if (!p.seals.includes(seal)) p.seals.push(seal);
@@ -459,6 +468,7 @@ class App {
     const now = this.now;
     for (const e of w.drainEvents()) {
       this.view.onEvent(e, w);
+      this.ideas.onEvent(e, w, now); // [ideas]
       switch (e.type) {
         case 'chopHit':
           a.chop();
@@ -641,7 +651,7 @@ class App {
     const s = w.state;
 
     if (this.mode === 'play' && this.simActive) {
-      this.acc += dt;
+      this.acc += dt * this.ideas.timeScale(dt); // [ideas 10] near-miss slow motion; the fixed steps themselves are unchanged
       let guard = 0;
       while (this.acc >= DT && guard++ < 5) {
         w.step(this.buildInput());
@@ -690,6 +700,7 @@ class App {
     else if (s.phase === 'victory') screen = 'victory';
     this.hud.show(screen, w, this.store.profile, this.store.run, this.view.lowQuality, this.confirmNew);
     this.hud.update(w, this.now, this.view.hitPulse, this.view.settings.flash);
+    this.ideas.frame(w, dt, this.now, this.mode === 'play' && this.simActive); // [ideas]
     document.getElementById('hud')!.classList.toggle('menu', screen !== 'none');
 
     if (DEBUG) this.debug(dt);

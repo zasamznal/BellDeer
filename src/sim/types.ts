@@ -1,4 +1,5 @@
 import type { V2 } from './forest';
+import type { ChallengeKind, Omen } from './rules';
 
 export type Phase = 'day' | 'night' | 'draft' | 'deathOffer' | 'end' | 'victory';
 
@@ -13,7 +14,8 @@ export type DeerMode =
   | 'swing'
   | 'recover'
   | 'stunned'
-  | 'retreat';
+  | 'retreat'
+  | 'lured'; // [ideas 5] walking to a thrown tin, then looking around
 
 export type Maneuver = 'none' | 'trapSense' | 'decoyChime' | 'straightCharge' | 'secondLunge';
 
@@ -48,6 +50,8 @@ export interface DeerState {
   goalZ: number;
   nearMiss: number; // closest missed swing distance this run (for the result card)
   search: number[] | null; // posts left to check during a hunt with no sighting
+  lure: V2 | null; // [ideas 5] where the tin landed while mode is 'lured'
+  lureT: number; // [ideas 5] seconds spent looking around at the tin (0 = still walking)
 }
 
 export interface TrapState {
@@ -112,6 +116,37 @@ export interface RunStats {
   feeds: number;
   activeSeconds: number;
   seals: number[]; // chapter numbers with a banked seal
+  score: number; // [ideas 9] run score ("Heat")
+}
+
+/** [ideas] State of the ten additions (src/sim/ideas.ts). Plain JSON; old saves get the defaults. */
+export interface IdeasState {
+  /** Tonight's omen. Set on the dusk tick (day second 43), back to 'calm' when the next day begins. */
+  omen: Omen;
+  /** Tonight's optional challenge ('' = none), set together with the omen. */
+  challenge: ChallengeKind;
+  challengeDone: boolean;
+  challengeFailed: boolean;
+  /** Counters of the current night. */
+  nightBanked: number;
+  nightTaken: number;
+  nightHits: number;
+  nightTraps: number;
+  outsideTicks: number;
+  /** Ticks outside protection not yet turned into a score point. */
+  scoreTicks: number;
+  /** Where the Deer steps out tonight; null = old rule (opposite the player). */
+  tracks: { angle: number; x: number; z: number; found: boolean } | null;
+  /** Today's resin pine (index into forest.snags), −1 = none. */
+  resinSnag: number;
+  resinScored: boolean;
+  /** Ember blow: used this night / seconds E has been held. */
+  blowUsed: boolean;
+  blowHold: number;
+  lureCd: number;
+  /** Dawn rewards, valid during the draft: four cards / rare-or-epic first card. */
+  dawnFour: boolean;
+  dawnRare: boolean;
 }
 
 export interface RunState {
@@ -148,6 +183,7 @@ export interface RunState {
   choppedOnce: boolean;
   stats: RunStats;
   rng: { loot: number; threat: number; cards: number };
+  ideas: IdeasState; // [ideas]
 }
 
 export interface Input {
@@ -165,6 +201,8 @@ export interface Input {
   torch: boolean;
   flare: boolean;
   craft: 0 | 1 | 2 | 3;
+  lure: boolean; // [ideas 5] R: throw a tin (edge)
+  blow: boolean; // [ideas 8] E held (blow on the embers)
 }
 
 export const emptyInput = (): Input => ({
@@ -182,6 +220,8 @@ export const emptyInput = (): Input => ({
   torch: false,
   flare: false,
   craft: 0,
+  lure: false,
+  blow: false,
 });
 
 export type FocusKind = 'snag' | 'fire' | 'scrap' | 'bush' | 'cache' | 'bench' | 'post';
@@ -237,4 +277,11 @@ export type SimEvent =
   | { type: 'revived' }
   | { type: 'victory' }
   | { type: 'denied'; why: string }
-  | { type: 'save' };
+  | { type: 'save' }
+  // [ideas]
+  | { type: 'tracksFound'; x: number; z: number }
+  | { type: 'lure'; x: number; z: number; pulled: boolean }
+  | { type: 'blow'; gain: number }
+  | { type: 'challengeDone'; kind: ChallengeKind }
+  | { type: 'challengeFailed'; kind: ChallengeKind }
+  | { type: 'score'; n: number; why: string };
