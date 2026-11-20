@@ -187,6 +187,12 @@ describe('soak: 99 nights', () => {
     expect(a.events.fireWeak ?? 0).toBe(0);
     expect(a.events.nightStart).toBe(99);
     expect(a.events.dawn).toBe(99);
+    // The run meets the gameplay additions on the way (its days are played tick by tick, so every
+    // dusk rolls an omen): the 19 bell nights 5, 10 … 95 each open a third cache, and every
+    // survived night is worth 100 points. The exact tick count and the "never weak" fire above
+    // hold unchanged: wind (burn ×1.15) is still covered by the six guaranteed logs a day.
+    expect(a.events.cacheOpen).toBe(99 * 2 + 19);
+    expect(s.stats.score).toBeGreaterThanOrEqual(99 * 100);
     // Whole run in reasonable time (≈4 h of game time).
     expect(ms).toBeLessThan(180_000);
   }, 300_000);
