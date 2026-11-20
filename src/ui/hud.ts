@@ -83,9 +83,9 @@ export class Hud {
       const el = e.target as HTMLInputElement;
       if (el.dataset.vol) this.h.volume(el.dataset.vol as 'volume' | 'effects', Number(el.value));
     });
-    scr.addEventListener('mouseover', (e) => {
+    scr.addEventListener('mousemove', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-card]');
-      if (el) this.setFocusCard(Number(el.dataset.card));
+      if (el && Number(el.dataset.card) !== this.focusCard) this.setFocusCard(Number(el.dataset.card));
     });
     const track = $('track');
     for (const st of STAGES.slice(1)) {
@@ -122,6 +122,10 @@ export class Hud {
   relabel(): void {
     this.cache = {};
     this.screenKey = '';
+    // Lines already on screen were written in the previous language.
+    this.subs = [];
+    this.hintUntil = 0;
+    document.getElementById('toasts')!.innerHTML = '';
   }
 
   // ------------------------------------------------------------ transient text
@@ -140,9 +144,10 @@ export class Hud {
     if (this.subs.length > 3) this.subs.shift();
   }
   toast(text: string): void {
+    const box = $('toasts');
+    for (const old of Array.from(box.children)) if (old.textContent === text) old.remove();
     const el = document.createElement('div');
     el.textContent = text;
-    const box = $('toasts');
     box.appendChild(el);
     while (box.children.length > 4) box.firstElementChild!.remove();
     setTimeout(() => el.remove(), 3000);
@@ -244,7 +249,14 @@ export class Hud {
         text = t('hBench');
       }
     }
-    if (pl.trapHold > 0) {
+    const ghost = w.trapGhost;
+    if (ghost && !ghost.ok && pl.trapHold >= 0) {
+      // Say why the trap cannot be set instead of failing silently.
+      key = 'Q';
+      off = true;
+      prog = 0;
+      text = s.traps.length >= RULES.limits.placedTraps ? t('hTrapLimit') : pl.traps <= 0 && pl.scrap < w.mods.trapCost ? t('hTrapNoScrap') : t('hTrapSpot');
+    } else if (pl.trapHold > 0) {
       key = 'Q';
       text = t('rTrap');
       prog = pl.trapHold / RULES.trap.placeSeconds;
@@ -276,7 +288,7 @@ export class Hud {
           rows
             .map(
               ([n, name, cost]) =>
-                `<div class="row${w.canCraft(n) ? '' : ' off'}"><span class="key">${n}</span><span>${name}</span><span class="cost">${cost} ${t('scrap')}</span>` +
+                `<div class="row${w.canCraft(n) ? '' : ' off'}"><span class="key">${n}</span><span>${name}</span><span class="cost">${t('scrapCost', { n: cost })}</span>` +
                 (pl.craft === n ? `<i class="prog" style="width:${Math.round((pl.craftT / need) * 20) * 5}%"></i>` : '') +
                 `</div>`,
             )
@@ -303,11 +315,12 @@ export class Hud {
 
   private cardHtml(id: string, i: number): string {
     const c = CARD_BY_ID[id];
-    const delta = c.from ? `${val(c.from)} → ${val(c.to)}` : val(c.to);
+    const long = c.from.length + c.to.length > 11;
+    const delta = c.from ? `${val(c.from)} →${long ? '<br>' : ' '}${val(c.to)}` : val(c.to);
     return (
       `<button class="card${i === this.focusCard ? ' focus' : ''}" data-card="${i}">` +
       `<i class="rar ${c.rarity}"></i><div class="name">${t(id)}</div>${CARD_ART[id] ?? ''}` +
-      `<div class="stat">${statLabel(c.stat)}</div><div class="delta">${delta}</div><span class="key">${i + 1}</span></button>`
+      `<div class="stat">${statLabel(c.stat)}</div><div class="delta${long ? ' long' : ''}">${delta}</div><span class="key">${i + 1}</span></button>`
     );
   }
 
@@ -328,12 +341,18 @@ export class Hud {
   }
 
   private buildChips(s: RunState): string {
-    return s.cards.length ? `<div class="chips">${s.cards.map((id) => `<span>${t(id)}</span>`).join('')}</div>` : `<p>${t('noCards')}</p>`;
+    return s.cards.length ? `<div class="chips"><em>${t('build')}</em>${s.cards.map((id) => `<span>${t(id)}</span>`).join('')}</div>` : `<p>${t('noCards')}</p>`;
+  }
+  private controlsHtml(): string {
+    return `<div class="controls">${t('controls')
+      .split(' · ')
+      .map((x) => `<span>${x}</span>`)
+      .join('')}</div>`;
   }
 
-  show(kind: ScreenKind, w: World | null, profile: Profile, saved: RunState | null, lowQ: boolean): void {
+  show(kind: ScreenKind, w: World | null, profile: Profile, saved: RunState | null, lowQ: boolean, confirmNew = false): void {
     const s = w?.state;
-    const key = [kind, getLang(), s?.hand?.join(','), s?.pendingCard, s?.night, s?.player.scrap, JSON.stringify(profile.settings), lowQ, saved?.revision].join('|');
+    const key = [kind, getLang(), s?.hand?.join(','), s?.pendingCard, s?.night, s?.player.scrap, JSON.stringify(profile.settings), lowQ, saved?.revision, confirmNew].join('|');
     if (key === this.screenKey) return;
     const kindChanged = this.screen !== kind;
     this.screenKey = key;
@@ -351,14 +370,17 @@ export class Hud {
       cls = 'title';
       html =
         `<div class="box"><div class="eyebrow">BellDeer · prototype 0.1</div><h1>${t('title')}</h1><p>${t('tagline')}</p><div class="btns">` +
-        (saved ? `<button class="primary" data-act="continue">${t('continueRun', { n: saved.night })}</button><button data-act="new">${t('newRun')}</button>` : `<button class="primary" data-act="play">${t('play')}</button>`) +
-        `</div>${this.settingsHtml(profile, lowQ)}<p class="fine">${t('controls')}</p>` +
+        (saved
+          ? `<button class="primary" data-act="continue">${t(saved.phase === 'draft' ? 'continueDawn' : 'continueRun', { n: saved.night })}</button>` +
+            `<button data-act="new">${t(confirmNew ? 'confirmNew' : 'newRun')}</button>`
+          : `<button class="primary" data-act="play">${t('play')}</button>`) +
+        `</div>${this.settingsHtml(profile, lowQ)}${this.controlsHtml()}` +
         (profile.best ? `<p class="fine">${t('best', { n: profile.best })}</p>` : '') +
         `</div>`;
     } else if (kind === 'pause') {
       html =
         `<div class="box"><div class="eyebrow">${t('paused')}</div><div class="btns"><button class="primary" data-act="resume">${t('resume')}</button><button data-act="title">${t('toTitle')}</button></div>` +
-        `${this.settingsHtml(profile, lowQ)}<p class="fine">${t('controls')}</p></div>`;
+        `${this.settingsHtml(profile, lowQ)}${this.controlsHtml()}</div>`;
     } else if (kind === 'draft' && s?.hand) {
       cls = 'draft';
       html =
@@ -387,7 +409,7 @@ export class Hud {
       html =
         `<div class="box"><div class="eyebrow">${t('night')} ${s.night} / 99</div><h2>${t('lastChance')}</h2><div class="btns">` +
         `<button class="primary" data-act="revive" ${w!.canRevive ? '' : 'disabled'}>${t('reviveScrap')}</button><button data-act="endRun">${t('endRun')}</button></div>` +
-        (w!.canRevive ? '' : `<p class="fine">${t('reviveNone')}</p>`) +
+        (w!.canRevive ? '' : `<p class="fine">${t(s.reviveUsed ? 'reviveUsed' : 'reviveNone')}</p>`) +
         `</div>`;
     } else if (kind === 'end' && s) {
       cls = 'dead';

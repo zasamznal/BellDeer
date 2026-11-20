@@ -27,6 +27,7 @@ class App {
   world!: World;
   private mode: 'title' | 'play' | 'pause' | 'session' = 'title';
   private chapterPanel = false;
+  private confirmNew = false;
   private keys = new Set<string>();
   private edge = emptyInput();
   private yaw = 0;
@@ -251,7 +252,7 @@ class App {
   private pause(): void {
     if (this.mode !== 'play' || !this.simActive) return;
     this.mode = 'pause';
-    this.keys.clear();
+    // Held movement keys survive the pause (blur clears them, since their key-up is lost).
     this.lmb = false;
     this.unlock();
     this.platform.gameplay(false);
@@ -280,6 +281,14 @@ class App {
       case 'play':
       case 'new':
       case 'again': {
+        if (a === 'new' && this.store.run && !this.confirmNew) {
+          // A live save is about to be replaced: ask once more on the same button.
+          this.confirmNew = true;
+          break;
+        }
+        this.confirmNew = false;
+        // An abandoned run still counts in the profile.
+        if (this.store.run) this.finishRun('abandoned');
         const profile = this.store.profile;
         const night = Number(params.get('night')) || 1;
         this.setWorld(World.start({ seed: this.newSeed(), night, bonusTrap: profile.bonusTrap }));
@@ -289,6 +298,7 @@ class App {
         break;
       }
       case 'continue':
+        this.confirmNew = false;
         track('run_resumed', { night: w.state.night });
         this.resumeDraftIfPicked();
         this.startPlay();
@@ -324,7 +334,7 @@ class App {
         break;
       case 'low':
         st.lowQuality = !this.view.lowQuality;
-        this.view.setLowQuality(st.lowQuality);
+        this.view.setLowQuality(st.lowQuality, true);
         this.store.saveProfile();
         break;
       case 'skip':
@@ -397,10 +407,11 @@ class App {
   }
 
   private chooseCard(i: number): void {
+    const id = this.world.state.hand?.[i] ?? '';
     const r = pickCard(this.world, i);
     if (r === 'invalid') return;
     this.audio.cardPick();
-    if (r === 'done') this.afterPick(this.world.state.hand?.[i] ?? '');
+    if (r === 'done') this.afterPick(id);
   }
   private chooseReplace(slot: number): void {
     const id = this.world.state.pendingCard;
@@ -676,9 +687,9 @@ class App {
     else if (s.phase === 'deathOffer') screen = 'death';
     else if (s.phase === 'end') screen = 'end';
     else if (s.phase === 'victory') screen = 'victory';
-    this.hud.show(screen, w, this.store.profile, this.store.run, this.view.lowQuality);
+    this.hud.show(screen, w, this.store.profile, this.store.run, this.view.lowQuality, this.confirmNew);
     this.hud.update(w, this.now, this.view.hitPulse, this.view.settings.flash);
-    document.getElementById('hud')!.classList.toggle('menu', screen !== 'none' && screen !== 'pause');
+    document.getElementById('hud')!.classList.toggle('menu', screen !== 'none');
 
     if (DEBUG) this.debug(dt);
   }

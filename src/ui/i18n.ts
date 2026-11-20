@@ -24,7 +24,7 @@ const en: Dict = {
   lowQuality: 'Low quality',
   on: 'on',
   off: 'off',
-  controls: 'WASD move · Shift run · hold LMB chop · E use · F light · Q trap · T torch · G flare · B berry · P pause',
+  controls: 'WASD move · Shift run · hold LMB chop · E use · F light · hold Q trap · T torch · G flare · B berry · P pause',
   best: 'Best: night {n}',
   day: 'DAY',
   night: 'NIGHT',
@@ -47,6 +47,13 @@ const en: Dict = {
   runOver: 'Lived to night {n}',
   runOverDay: 'Survived {n} nights',
   survivedNights: 'Full nights survived: {n}',
+  continueDawn: 'Continue · dawn after night {n}',
+  confirmNew: 'Erase the saved run and start over',
+  reviveUsed: 'The last chance was already used in this run',
+  hTrapLimit: 'Two traps are already set',
+  hTrapNoScrap: 'No trap and not enough scrap',
+  hTrapSpot: 'No room for a trap here',
+  scrapCost: 'scrap × {n}',
   cause: 'Taken by the Bell-stag outside the light',
   tagsOut: 'Tags carried out: {n}',
   build: 'Build',
@@ -93,9 +100,9 @@ const en: Dict = {
   sBirds: 'The birds fall silent',
   sStunned: 'The Bell-stag is stunned',
   sRetreat: 'It backs into the fog',
-  tLogs: '+{n} logs',
-  tScrap: '+{n} scrap',
-  tBerry: '+{n} berries',
+  tLogs: '+{n} [log|logs]',
+  tScrap: 'Scrap +{n}',
+  tBerry: '+{n} [berry|berries]',
   tFlare: '+1 flare',
   tTag: 'Forest tag taken — carry it to the fire',
   tBank: 'Tags handed in: {n}',
@@ -106,7 +113,7 @@ const en: Dict = {
   tEmber: 'Coal under the ash: +14',
   tCacheGone: 'The cache has closed',
   tRevived: 'Back at the fire',
-  tLow: 'Low quality on to keep the frame rate',
+  tLow: 'Low quality is on',
   dBattery: 'Battery is empty',
   dLogs: 'No logs',
   dBerries: 'No berries',
@@ -181,7 +188,7 @@ const ru: Dict = {
   lowQuality: 'Низкое качество',
   on: 'вкл',
   off: 'выкл',
-  controls: 'WASD ходьба · Shift бег · удерживать ЛКМ — рубить · E действие · F фонарь · Q капкан · T факел · G ракета · B ягода · P пауза',
+  controls: 'WASD ходьба · Shift бег · держать ЛКМ — рубить · E действие · F фонарь · держать Q — капкан · T факел · G ракета · B ягода · P пауза',
   best: 'Рекорд: ночь {n}',
   day: 'ДЕНЬ',
   night: 'НОЧЬ',
@@ -203,7 +210,14 @@ const ru: Dict = {
   endRun: 'Завершить забег',
   runOver: 'Дожил до ночи {n}',
   runOverDay: 'Пережито {n} ночей',
-  survivedNights: 'Пережито {n} полных ночей',
+  survivedNights: 'Пережито полных ночей: {n}',
+  continueDawn: 'Продолжить · рассвет после ночи {n}',
+  confirmNew: 'Стереть сохранённый забег и начать заново',
+  reviveUsed: 'Последний шанс в этом забеге уже использован',
+  hTrapLimit: 'Два капкана уже стоят',
+  hTrapNoScrap: 'Нет капкана и не хватает лома',
+  hTrapSpot: 'Здесь капкан не поставить',
+  scrapCost: 'лом × {n}',
   cause: 'Звонарь настиг за границей света',
   tagsOut: 'Вынесено бирок: {n}',
   build: 'Сборка',
@@ -250,9 +264,9 @@ const ru: Dict = {
   sBirds: 'Птицы затихли',
   sStunned: 'Звонарь оглушён',
   sRetreat: 'Он отступает в туман',
-  tLogs: '+{n} полена',
-  tScrap: '+{n} лома',
-  tBerry: '+{n} ягода',
+  tLogs: '+{n} [полено|полена|поленьев]',
+  tScrap: 'Лом +{n}',
+  tBerry: '+{n} [ягода|ягоды|ягод]',
   tFlare: '+1 ракета',
   tTag: 'Лесная бирка у тебя — донеси её до костра',
   tBank: 'Сдано бирок: {n}',
@@ -263,7 +277,7 @@ const ru: Dict = {
   tEmber: 'Уголь под золой: +14',
   tCacheGone: 'Тайник закрылся',
   tRevived: 'Снова у костра',
-  tLow: 'Включено низкое качество, чтобы держать частоту кадров',
+  tLow: 'Включено низкое качество',
   dBattery: 'Батарея пуста',
   dLogs: 'Нет поленьев',
   dBerries: 'Нет ягод',
@@ -324,6 +338,7 @@ let lang: Lang = 'en';
 export function setLang(l: Lang): void {
   lang = l;
   document.documentElement.lang = l;
+  document.title = dicts[l].title;
 }
 export function getLang(): Lang {
   return lang;
@@ -333,9 +348,19 @@ export function detectLang(): Lang {
   const n = (navigator.languages?.[0] ?? navigator.language ?? 'en').toLowerCase();
   return n.startsWith('ru') || n.startsWith('be') || n.startsWith('uk') || n.startsWith('kk') ? 'ru' : 'en';
 }
+/** Pick a plural form: English [one|other], Russian [one|few|many]. */
+function plural(forms: string[], n: number): string {
+  if (forms.length < 3) return n === 1 ? forms[0] : forms[forms.length - 1];
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (b === 1 && a !== 11) return forms[0];
+  if (b >= 2 && b <= 4 && (a < 12 || a > 14)) return forms[1];
+  return forms[2];
+}
 export function t(key: string, vars?: Record<string, string | number>): string {
   let s = dicts[lang][key] ?? en[key] ?? key;
   if (vars) for (const k in vars) s = s.replace(`{${k}}`, String(vars[k]));
+  if (s.includes('[')) s = s.replace(/\[([^\]]+)\]/g, (_m, g: string) => plural(g.split('|'), Number(vars?.n ?? 0)));
   return s;
 }
 /** Localise a value from the card table: units and decimal comma. */
