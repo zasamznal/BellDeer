@@ -6,7 +6,7 @@ import type { RunState } from '../sim/types';
 import type { World } from '../sim/world';
 import { canReroll } from '../sim/draft';
 import type { Profile } from '../platform/store';
-import { CARD_ART } from './cardArt';
+import { cardArtHtml } from './cardArt';
 import { getLang, statLabel, t, val } from './i18n';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -319,7 +319,7 @@ export class Hud {
     const delta = c.from ? `${val(c.from)} →${long ? '<br>' : ' '}${val(c.to)}` : val(c.to);
     return (
       `<button class="card${i === this.focusCard ? ' focus' : ''}" data-card="${i}">` +
-      `<i class="rar ${c.rarity}"></i><div class="name">${t(id)}</div>${CARD_ART[id] ?? ''}` +
+      `<i class="rar ${c.rarity}"></i><div class="name">${t(id)}</div>${cardArtHtml(id)}` +
       `<div class="stat">${statLabel(c.stat)}</div><div class="delta${long ? ' long' : ''}">${delta}</div><span class="key">${i + 1}</span></button>`
     );
   }

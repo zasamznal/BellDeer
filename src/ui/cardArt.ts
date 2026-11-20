@@ -90,3 +90,22 @@ export const CARD_ART: Record<string, string> = {
     '<path fill="#c23b34" d="M12.5 88 47 51.5 51.5 55.5 17 92z"/><path fill="#8a3f2c" d="M17 92 51.5 55.5 55.5 59.5 21.5 96z"/><path fill="#d9d2c4" d="M19.5 80.5 23.5 76 28 80.5 24 84.5z"/><path fill="#b3a893" d="M24 84.5 28 80.5 32.5 84.5 28 89z"/><path fill="#9aa5b0" d="M46 51 49.5 47 60 57 56.5 60.5z"/><path fill="#7794a8" d="M71 3.5 72.5 29 87 24.5 78.5 36.5 102.5 45 77 46.5 81.5 61 69.5 52.5 61 76.5 59.5 51 45 55.5 53.5 43.5 29.5 35 55 33.5 50.5 19 62.5 27.5z"/><path fill="#b9d2ff" d="M70.5 8.5 71 31.5 83 27.5 75.5 37.5 97.5 44.5 74.5 45 78.5 57 68.5 49.5 61.5 71.5 61 48.5 49 52.5 56.5 42.5 34.5 35.5 57.5 35 53.5 23 63.5 30.5z"/><path fill="#eef4ff" d="M69.5 15 69.5 34 78 31 73 38 91 43.5 72 43.5 75 52 68 47 62.5 65 62.5 46 54 49 59 42 41 36.5 60 36.5 57 28 64 33zM20 22 23 26 20 30 17 26zM108 74 111 78 108 82 105 78zM104 9 106 12 104 15 102 12zM30 55 32 58 30 61 28 58zM92 83 94 86 92 89 90 86z"/>',
   ),
 };
+
+// ---------------------------------------------------------------- painted icons
+// The painted icon sheet (src/assets/cards.webp, 5 × 4 cells in the order below)
+// replaces the vector drawings above when it is bundled.
+import './art.css';
+import { imageUrl } from '../render/assets';
+
+const SHEET_ORDER = ['C01', 'C02', 'C03', 'C04', 'C05', 'C06', 'C07', 'C08', 'R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'E01', 'E02', 'E03', 'E04'];
+const sheet = imageUrl('cards.webp');
+
+export function cardArtHtml(id: string): string {
+  const i = SHEET_ORDER.indexOf(id);
+  if (sheet && i >= 0) {
+    const col = i % 5;
+    const row = Math.floor(i / 5);
+    return `<div class="art" style="background-image:url('${sheet}');background-position:${col * 25}% ${(row / 3) * 100}%"></div>`;
+  }
+  return CARD_ART[id] ?? '';
+}

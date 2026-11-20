@@ -10,6 +10,11 @@ import type { World } from '../sim/world';
 import { DeerModel, type DeerPose } from './deerModel';
 import { Builder, M, rnd, rr, srand, woodMaterial } from './geo';
 import * as P from './props';
+import { type Fit, upgradeMesh } from './assets';
+
+// How the generated models sit inside the procedural hosts they replace (host space:
+// handle along +Y, blade toward -X, forearm toward the camera).
+const AXE_FIT: Fit = { scale: 0.4, position: [0.02, 0.1, 0], rotation: [0, -1.03, 0] };
 
 interface Sky {
   top: THREE.Color;
@@ -215,6 +220,8 @@ export class SceneView {
     this.axe = new THREE.Mesh(P.axeGeometry(), this.wood);
     this.axe.scale.setScalar(0.72);
     cam.add(this.axe);
+    // Authored hand-and-axe model replaces the procedural one when it is bundled.
+    void upgradeMesh(this.axe, 'axe-hand', AXE_FIT);
     this.lightModel = new THREE.Mesh(P.flashlightGeometry(), this.wood);
     this.lightModel.scale.setScalar(0.85);
     cam.add(this.lightModel);
