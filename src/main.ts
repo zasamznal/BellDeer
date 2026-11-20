@@ -11,6 +11,7 @@ import { World } from './sim/world';
 import { loadFonts } from './ui/fonts';
 import { type Action, Hud, type ScreenKind } from './ui/hud';
 import { detectLang, getLang, setLang, t } from './ui/i18n';
+import { saveResultCard } from './ui/resultCard';
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
@@ -354,6 +355,28 @@ class App {
         w.endRun();
         this.finishRun('deer');
         break;
+      case 'saveFrame': {
+        // One PNG on request (GDD §6): 1080×1920 card with the night, the cause and the build.
+        const s = w.state;
+        const victory = s.phase === 'victory';
+        const data = {
+          headline: victory ? t('victory') : t('runOver', { n: s.night }),
+          subline: t('survivedNights', { n: s.stats.nightsSurvived }),
+          cause: victory ? t('victoryText') : t('cause'),
+          tagsLine: t('tagsOut', { n: s.stats.tagsBanked }),
+          buildLabel: t('build'),
+          build: s.cards.map((id) => t(id)),
+          footer: t('title'),
+          night: s.night,
+          stage: w.stage,
+          victory,
+        };
+        const go = () => saveResultCard(data, `99-nights-night-${s.night}.png`);
+        // Wait for the HUD font so the card does not fall back to a system monospace.
+        if (document.fonts?.load) void document.fonts.load("400 96px 'BD Mono'", data.headline).then(go, go);
+        else go();
+        break;
+      }
     }
   }
 

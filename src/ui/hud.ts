@@ -6,6 +6,7 @@ import type { RunState } from '../sim/types';
 import type { World } from '../sim/world';
 import { canReroll } from '../sim/draft';
 import type { Profile } from '../platform/store';
+import { CARD_ART } from './cardArt';
 import { getLang, statLabel, t, val } from './i18n';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,15 +20,6 @@ const ICON = {
   trap: svg('<path d="M3 15h18"/><path d="M4 15l2-5 2 5 2-5 2 5 2-5 2 5 2-5 2 5"/><path d="M6 18h12"/>'),
   flare: svg('<path d="M6 19l8-8"/><path d="M12 9l3 3"/><path d="M17 3v3M21 7h-3M19.5 4.5l-1.6 1.6"/>'),
   tag: svg('<path d="M8 6h8l2 3v9H6V9z"/><circle cx="12" cy="9.5" r="1"/><path d="M12 3v3"/>'),
-};
-
-/** Large card drawings by tag, in the low-poly palette of the game. */
-const ART: Record<string, string> = {
-  fire: `<svg viewBox="0 0 120 100"><polygon points="12,62 58,40 82,52 36,76" fill="#8a5a36"/><polygon points="36,76 82,52 84,70 40,92" fill="#6b4329"/><polygon points="12,62 36,76 40,92 14,80" fill="#c99a62"/><polygon points="20,66 33,73 35,84 21,77" fill="#e0b97c"/><polygon points="40,40 86,22 104,34 60,54" fill="#9a6840"/><polygon points="60,54 104,34 106,50 64,70" fill="#73492d"/><polygon points="86,22 104,34 106,50 96,30" fill="#d7b887"/><polygon points="52,8 62,26 54,34 44,24" fill="#ffc56f"/><polygon points="54,34 62,26 66,36 58,42" fill="#bf532f"/></svg>`,
-  run: `<svg viewBox="0 0 120 100"><polygon points="22,58 40,48 52,58 50,80 36,92 22,82" fill="#7a7480"/><polygon points="26,60 38,53 46,60 44,74 34,82 27,76" fill="#5a5560"/><polygon points="62,34 80,26 92,36 88,58 74,68 62,58" fill="#8a8490"/><polygon points="66,37 78,31 86,38 83,54 73,61 66,54" fill="#625c68"/><path d="M84 18c6-4 4-10 10-12" stroke="#cfd8c0" stroke-width="3" fill="none" stroke-linecap="round"/><polygon points="20,44 26,40 30,46 24,50" fill="#7a7480"/><polygon points="58,20 64,16 68,22 62,26" fill="#8a8490"/></svg>`,
-  traps: `<svg viewBox="0 0 120 100"><polygon points="10,62 110,62 104,74 16,74" fill="#5c626b"/><polygon points="14,62 22,40 30,62 38,40 46,62 54,40 62,62 70,40 78,62 86,40 94,62 102,40 106,62" fill="#9aa5b0"/><polygon points="40,50 80,50 86,66 34,66" fill="#7c8792"/><polygon points="50,54 70,54 73,62 47,62" fill="#c2cad2"/><polygon points="16,74 104,74 98,86 22,86" fill="#444a52"/><polygon points="22,86 30,74 38,86 46,74 54,86 62,74 70,86 78,74 86,86 94,74 98,86" fill="#7c8792"/></svg>`,
-  beam: `<svg viewBox="0 0 120 100"><polygon points="16,58 44,46 52,62 24,76" fill="#3a3d45"/><polygon points="44,46 58,36 70,60 52,62" fill="#565a64"/><polygon points="58,36 70,60 112,84 112,10" fill="#b9d2ff" opacity="0.32"/><polygon points="58,36 70,60 104,62 104,30" fill="#dfeaff" opacity="0.5"/><polygon points="24,76 52,62 54,68 28,82" fill="#24262c"/><circle cx="34" cy="60" r="4" fill="#e9a23b"/></svg>`,
-  supply: `<svg viewBox="0 0 120 100"><polygon points="20,70 100,70 92,88 28,88" fill="#4a3529"/><polygon points="24,48 96,48 100,70 20,70" fill="#6b4a30"/><polygon points="34,30 86,30 96,48 24,48" fill="#8a6a44"/><polygon points="52,22 68,22 72,90 48,90" fill="#c9b58a"/><polygon points="20,56 100,56 100,62 20,62" fill="#c9b58a"/></svg>`,
 };
 
 export type Action =
@@ -47,7 +39,8 @@ export type Action =
   | 'endSession'
   | 'revive'
   | 'endRun'
-  | 'again';
+  | 'again'
+  | 'saveFrame';
 
 export type ScreenKind = 'none' | 'title' | 'pause' | 'draft' | 'replace' | 'chapter' | 'session' | 'death' | 'end' | 'victory';
 
@@ -313,7 +306,7 @@ export class Hud {
     const delta = c.from ? `${val(c.from)} → ${val(c.to)}` : val(c.to);
     return (
       `<button class="card${i === this.focusCard ? ' focus' : ''}" data-card="${i}">` +
-      `<i class="rar ${c.rarity}"></i><div class="name">${t(id)}</div>${ART[c.tag]}` +
+      `<i class="rar ${c.rarity}"></i><div class="name">${t(id)}</div>${CARD_ART[id] ?? ''}` +
       `<div class="stat">${statLabel(c.stat)}</div><div class="delta">${delta}</div><span class="key">${i + 1}</span></button>`
     );
   }
@@ -400,12 +393,12 @@ export class Hud {
       cls = 'dead';
       html =
         `<div class="box"><h1>${t('runOver', { n: s.night })}</h1><p>${t('survivedNights', { n: s.stats.nightsSurvived })}</p><p>${t('cause')}</p>` +
-        `<p>${t('tagsOut', { n: s.stats.tagsBanked })}</p>${this.buildChips(s)}<div class="btns"><button class="primary" data-act="again">${t('again')}</button><button data-act="title">${t('menu')}</button></div></div>`;
+        `<p>${t('tagsOut', { n: s.stats.tagsBanked })}</p>${this.buildChips(s)}<div class="btns"><button class="primary" data-act="again">${t('again')}</button><button data-act="saveFrame">${t('saveFrame')}</button><button data-act="title">${t('menu')}</button></div></div>`;
     } else if (kind === 'victory' && s) {
       cls = 'draft';
       html =
         `<div class="box"><div class="eyebrow">${t('dawn')}</div><h1>${t('victory')}</h1><p>${t('victoryText')}</p><p>${t('tagsOut', { n: s.stats.tagsBanked })}</p>` +
-        `${this.buildChips(s)}<div class="btns"><button class="primary" data-act="again">${t('again')}</button></div></div>`;
+        `${this.buildChips(s)}<div class="btns"><button class="primary" data-act="again">${t('again')}</button><button data-act="saveFrame">${t('saveFrame')}</button></div></div>`;
     }
     el.className = cls;
     el.innerHTML = html;
