@@ -9,6 +9,7 @@ import type { SimEvent } from '../sim/types';
 import type { World } from '../sim/world';
 import { DeerModel, type DeerPose } from './deerModel';
 import { Builder, M, rnd, rr, srand, woodMaterial } from './geo';
+import { IdeasView } from './ideasView'; // [ideas] tracks, resin pine, omen fog, bell-night tint
 import * as P from './props';
 
 interface Sky {
@@ -118,6 +119,8 @@ export class SceneView {
   settings: ViewSettings = { shake: true, flash: true };
   /** 0..1 screen flash requested by the view (hit, flare); the HUD draws it. */
   hitPulse = 0;
+  /** [ideas] Extra meshes and night looks of the gameplay additions (src/render/ideasView.ts). */
+  readonly ideas = new IdeasView();
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -711,6 +714,7 @@ export class SceneView {
       dv.apply(p);
     }
 
+    this.ideas.update(w, dt, { scene: this.scene, fog, moon: this.moon, sky: this.skyMat, hemi: this.hemi, night, title }); // [ideas]
     this.renderer.render(this.scene, this.camera);
   }
 

@@ -24,6 +24,10 @@ export interface Profile {
   seenStages: number[];
   seals: number[];
   bonusTrap: boolean;
+  /** [ideas 9] Best run score ("Heat"). */
+  bestScore: number;
+  /** [ideas] One-time hints already shown (lure, blow, resin, tracks). */
+  hintsSeen: string[];
   settings: Settings;
 }
 
@@ -48,6 +52,8 @@ export const defaultProfile = (): Profile => ({
   seenStages: [],
   seals: [],
   bonusTrap: false,
+  bestScore: 0,
+  hintsSeen: [],
   settings: { lang: null, volume: 0.8, effects: 1, shake: true, flash: true, subtitles: true, lowQuality: false },
 });
 

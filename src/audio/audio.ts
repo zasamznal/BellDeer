@@ -322,4 +322,71 @@ export class Audio {
       }
     } else this.stepT = 0.1;
   }
+
+  // ------------------------------------------------------------ [ideas]
+
+  private heartT = 0;
+  private heartEnv = 0;
+  /**
+   * [ideas 1] Threat pulse: a heartbeat whose rate and volume follow `level`
+   * (threat / 32, 0..1). Returns the 0..1 envelope of the current beat so the
+   * screen-edge pulse moves with the sound; the beat clock runs even when the
+   * audio context is not available. Goes through the effects and master gains.
+   */
+  heart(dt: number, level: number): number {
+    this.heartEnv = Math.max(0, this.heartEnv - dt * 3.4);
+    if (level <= 0.02) {
+      this.heartT = 0;
+      return this.heartEnv;
+    }
+    this.heartT -= dt;
+    if (this.heartT <= 0) {
+      this.heartT = 60 / (54 + 86 * level); // 54 → 140 beats a minute
+      this.heartEnv = 1;
+      if (this.ctx && this.ctx.state === 'running') {
+        const o = this.out(0, 0.2 + 0.8 * level);
+        const g = 0.3 + 0.6 * level;
+        this.tone(o, 84, 46, 0.13, g, 'triangle');
+        this.burst(o, 150, 0.7, 0.07, g * 0.5, 'lowpass');
+        this.tone(o, 70, 40, 0.11, g * 0.65, 'triangle', 0.13 + 0.07 * (1 - level));
+      }
+    }
+    return this.heartEnv;
+  }
+  /** [ideas 10] Low whoosh of a swing that just missed. */
+  whoosh(): void {
+    if (!this.ctx) return;
+    const o = this.out(0, 0.85);
+    this.burst(o, 240, 0.6, 0.8, 0.6, 'lowpass');
+    this.tone(o, 160, 52, 0.75, 0.32, 'sine');
+  }
+  /** [ideas 5] A thrown tin bounces and rolls. */
+  clatter(x: number, z: number): void {
+    if (!this.ctx) return;
+    const p = this.place(x, z, 40);
+    const o = this.out(p.pan, 0.3 + p.gain * 0.7);
+    let at = 0;
+    for (let i = 0; i < 6; i++) {
+      this.burst(o, 2300 + Math.random() * 1900, 7, 0.035, 0.55 - i * 0.07, 'bandpass', at);
+      this.tone(o, 1350 + Math.random() * 900, 1100, 0.05, 0.11 - i * 0.012, 'square', at);
+      at += 0.16 * 0.72 ** i + Math.random() * 0.02;
+    }
+  }
+  /** [ideas 7] Three heavy tolls open a bell night (slower and lower than the double strike of a hunt). */
+  tolls(): void {
+    if (!this.ctx) return;
+    const o = this.out(0, 0.85);
+    for (let i = 0; i < 3; i++) {
+      this.bell(o, 110, 3.4, 0.5, i * 1.3);
+      this.tone(o, 55, 46, 0.6, 0.5, 'triangle', i * 1.3);
+    }
+  }
+  /** [ideas 8] A long breath on the embers, then they catch. */
+  blow(): void {
+    if (!this.ctx) return;
+    const o = this.out(0, 0.85);
+    this.burst(o, 1500, 0.5, 0.55, 0.32, 'bandpass');
+    this.burst(o, 420, 0.6, 0.6, 0.4, 'lowpass', 0.3);
+    for (let i = 0; i < 6; i++) this.burst(o, 2500 + Math.random() * 3000, 4, 0.02, 0.4, 'bandpass', 0.4 + i * 0.07);
+  }
 }
