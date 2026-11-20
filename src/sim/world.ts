@@ -15,7 +15,10 @@ import { newDeer, resolveSwing, stepDeer, stunDeer } from './deer';
 import { dealHand } from './draft';
 
 const P = RULES.player;
+/** Below this gain the fire counts as full and E spends nothing. */
+const MIN_FEED = 1;
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const CLOCK_EPS = 1e-6;
 
 export const forwardOf = (yaw: number): V2 => ({ x: -Math.sin(yaw), z: -Math.cos(yaw) });
 
@@ -68,7 +71,7 @@ export class World {
         x: forest.spawn.x,
         z: forest.spawn.z,
         yaw: forest.spawn.yaw,
-        pitch: 0,
+        pitch: -0.2, // eyes on the notch of the first snag
         hp: P.hpMax,
         stamina: P.staminaMax,
         exhausted: false,
@@ -192,8 +195,10 @@ export class World {
     s.stats.activeSeconds += DT;
 
     // 1. Phase transitions (dawn is resolved before anything can hurt the player).
-    if (s.phase === 'day' && s.t >= RULES.cycle.daySeconds) this.beginNight();
-    else if (s.phase === 'night' && s.t >= RULES.cycle.nightSeconds) {
+    // `t` is a float sum of 1/30 s steps and lands a hair below 60 / 90 after
+    // 1800 / 2700 ticks; the tolerance keeps the cycle at exactly 150 s (4500 ticks).
+    if (s.phase === 'day' && s.t >= RULES.cycle.daySeconds - CLOCK_EPS) this.beginNight();
+    else if (s.phase === 'night' && s.t >= RULES.cycle.nightSeconds - CLOCK_EPS) {
       this.beginDawn();
       return;
     }
@@ -218,6 +223,9 @@ export class World {
       stepDeer(this);
       this.stepTraps();
       resolveSwing(this); // contact is cancelled inside protection, then damage
+    } else {
+      // A trap set by day arms on the same 0.7 s clock (there is nothing to catch until dusk).
+      for (const t of s.traps) if (t.arm > 0) t.arm -= DT;
     }
     this.updateFocus();
   }
@@ -294,6 +302,18 @@ export class World {
       const oz = pl.z;
       pl.x += (fw.x * mz + rx * mx) * speed * DT;
       pl.z += (fw.z * mz + rz * mx) * speed * DT;
+      // The Deer's body blocks the way: no dodging a swing by running through it.
+      const dd = s.deer;
+      if (s.phase === 'night' && dd.mode !== 'hidden') {
+        const gx = pl.x - dd.x;
+        const gz = pl.z - dd.z;
+        const g = Math.hypot(gx, gz);
+        const min = RULES.deer.radius + RULES.world.playerRadius;
+        if (g < min && g > 1e-4) {
+          pl.x = dd.x + (gx / g) * min;
+          pl.z = dd.z + (gz / g) * min;
+        }
+      }
       resolveCircle(this.forest.obstacles, pl, RULES.world.playerRadius, RULES.world.radius - 0.6);
       const moved = Math.hypot(pl.x - ox, pl.z - oz);
       pl.noise = Math.max(pl.noise, wantSprint ? m.hearRun : m.hearStep);
@@ -397,7 +417,7 @@ export class World {
       else if (f && f.usable) {
         if (f.kind === 'fire') {
           const gain = Math.min(m.fuelPerLog, RULES.fire.max - s.fuel);
-          if (pl.logs > 0 && gain > 0.01) {
+          if (pl.logs > 0 && gain >= MIN_FEED) {
             pl.logs--;
             fuelAdded += gain;
             s.fedOnce = true;
@@ -575,7 +595,7 @@ export class World {
         }
       }
       if (c.status === 'open') {
-        if (!c.revealed && this.inBeam(post, 4)) {
+        if (!c.revealed && this.inBeam(post)) {
           c.reveal += DT;
           if (c.reveal >= this.mods.revealSeconds) {
             c.revealed = true;
@@ -614,7 +634,7 @@ export class World {
         continue;
       }
       if (d.mode === 'hidden') continue;
-      if (dist(t, d) <= RULES.trap.radius + 0.25 && stunDeer(this, this.mods.trapStun, 'trap')) {
+      if (dist(t, d) <= RULES.trap.radius && stunDeer(this, this.mods.trapStun, 'trap')) {
         s.traps.splice(i, 1);
         this.emit({ type: 'trapSnap', x: t.x, z: t.z });
       }
@@ -651,8 +671,8 @@ export class World {
     });
     {
       const gain = Math.min(this.mods.fuelPerLog, RULES.fire.max - s.fuel);
-      const usable = pl.logs > 0 && gain > 0.01;
-      const info = gain <= 0.01 ? 'fireFull' : pl.logs <= 0 ? 'noLogs' : `+${Math.round(gain)}`;
+      const usable = pl.logs > 0 && gain >= MIN_FEED;
+      const info = gain < MIN_FEED ? 'fireFull' : pl.logs <= 0 ? 'noLogs' : `+${Math.round(gain)}`;
       consider('fire', 0, { x: 0, z: 0 }, 0.85, info, usable, 0.5);
     }
     F.scrap.forEach((n, i) => {
@@ -681,7 +701,7 @@ export class World {
     s.t = 0;
     s.emberUsed = false;
     // Two caches on different posts, 14–17 m from the fire.
-    const order = [0, 1, 2].sort(() => this.rngLoot.next() - 0.5);
+    const order = this.rngLoot.shuffle(this.forest.posts.map((_, i) => i));
     s.caches = RULES.cache.times.map(
       (openAt, i): CacheState => ({ post: order[i], openAt, reward: i === 0 ? 'scrap' : 'flare', reveal: 0, revealed: false, status: 'pending' }),
     );
@@ -724,6 +744,7 @@ export class World {
     pl.chop = 0;
     pl.pick = 0;
     pl.eat = 0;
+    pl.lightOn = false;
     pl.battery = Math.min(RULES.flashlight.max, pl.battery + RULES.flashlight.dawnCharge);
     pl.dynamoDay = 0;
     this.replenish();
@@ -745,7 +766,7 @@ export class World {
     const s = this.state;
     const refill = (arr: number[], full: number, min: number) => {
       let intact = arr.filter((v) => v >= full).length;
-      const order = arr.map((_, i) => i).sort(() => this.rngLoot.next() - 0.5);
+      const order = this.rngLoot.shuffle(arr.map((_, i) => i));
       for (const i of order) {
         if (intact >= min) break;
         if (arr[i] < full) {

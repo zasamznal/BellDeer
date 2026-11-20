@@ -25,6 +25,14 @@ export class Rng {
   sign(): number {
     return this.next() < 0.5 ? -1 : 1;
   }
+  /** In-place Fisher–Yates: unbiased, and the same on every JS engine (a random sort comparator is neither). */
+  shuffle<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = this.int(i + 1);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
 }
 
 export function hashSeed(seed: number, salt: string): number {

@@ -202,8 +202,11 @@ export class NavGrid {
     return best;
   }
 
-  /** A* on the 1 m grid, 8-connected without corner cutting. Returns waypoints (world) or null. */
-  findPath(a: V2, b: V2): V2[] | null {
+  /**
+   * A* on the 1 m grid, 8-connected without corner cutting. Returns waypoints (world) or null.
+   * `avoidR` > 0 also keeps the path out of a disc of that radius around the fire (the bright circle).
+   */
+  findPath(a: V2, b: V2, avoidR = 0): V2[] | null {
     const start = this.nearestFree(a);
     const goal = this.nearestFree(b);
     if (start < 0 || goal < 0) return null;
@@ -245,6 +248,7 @@ export class NavGrid {
           const nk = nj * S + ni;
           if (this.blocked[nk] || this.closed[nk]) continue;
           if (di && dj && (this.blocked[cj * S + ni] || this.blocked[nj * S + ci])) continue;
+          if (avoidR > 0 && nk !== goal && Math.hypot(ni - this.half + 0.5, nj - this.half + 0.5) < avoidR) continue;
           const ng = this.g[cur] + (di && dj ? 1.4142 : 1);
           if (ng < this.g[nk]) {
             this.g[nk] = ng;
@@ -267,7 +271,7 @@ export class NavGrid {
     while (i < pts.length) {
       let far = i;
       for (let k = pts.length - 1; k > i; k--)
-        if (this.segmentFree(anchor, pts[k])) {
+        if (this.segmentFree(anchor, pts[k], avoidR)) {
           far = k;
           break;
         }
@@ -278,12 +282,15 @@ export class NavGrid {
     return out;
   }
 
-  segmentFree(a: V2, b: V2): boolean {
+  segmentFree(a: V2, b: V2, avoidR = 0): boolean {
     const d = dist(a, b);
     const steps = Math.ceil(d / 0.4);
     for (let s = 1; s <= steps; s++) {
       const t = s / steps;
-      if (this.blocked[this.cell({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t })]) return false;
+      const x = a.x + (b.x - a.x) * t;
+      const z = a.z + (b.z - a.z) * t;
+      if (this.blocked[this.cell({ x, z })]) return false;
+      if (avoidR > 0 && s < steps && Math.hypot(x, z) < avoidR) return false;
     }
     return true;
   }

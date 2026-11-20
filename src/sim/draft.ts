@@ -65,6 +65,7 @@ export function pickCard(w: World, index: number): PickResult {
     if (id === 'C07') pl.logs = Math.min(RULES.limits.logs, pl.logs + 2);
     if (id === 'C08') pl.scrap = Math.min(RULES.limits.scrap, pl.scrap + 2);
     s.supplyRest = [id];
+    s.hand = []; // one choice per dawn
     return 'done';
   }
   if (s.cards.length >= RULES.draft.slots) {
@@ -73,6 +74,7 @@ export function pickCard(w: World, index: number): PickResult {
   }
   s.cards.push(id);
   s.lastTag = card.tag;
+  s.hand = [];
   w.refreshMods();
   return 'done';
 }
@@ -80,8 +82,9 @@ export function pickCard(w: World, index: number): PickResult {
 /** Resolve a pending fifth card: slot 0–3 replaces, −1 keeps the old build. */
 export function replaceCard(w: World, slot: number): boolean {
   const s = w.state;
-  if (s.phase !== 'draft' || !s.pendingCard) return false;
-  if (slot >= 0 && slot < s.cards.length) {
+  if (s.phase !== 'draft' || !s.pendingCard || slot >= s.cards.length) return false;
+  s.hand = [];
+  if (slot >= 0) {
     s.cards[slot] = s.pendingCard;
     s.lastTag = CARD_BY_ID[s.pendingCard].tag;
     w.refreshMods();
@@ -92,8 +95,9 @@ export function replaceCard(w: World, slot: number): boolean {
 
 export function skipCard(w: World): boolean {
   const s = w.state;
-  if (s.phase !== 'draft' || s.pendingCard) return false;
+  if (s.phase !== 'draft' || s.pendingCard || !s.hand?.length) return false;
   s.supplyRest = [];
+  s.hand = [];
   return true;
 }
 
@@ -101,7 +105,7 @@ export function canReroll(w: World): boolean {
   const s = w.state;
   return (
     s.phase === 'draft' &&
-    !!s.hand &&
+    !!s.hand?.length &&
     !s.pendingCard &&
     s.stats.nightsSurvived >= 2 &&
     s.rerollChapter !== w.chapterOf(s.night) &&

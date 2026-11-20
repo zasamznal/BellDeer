@@ -13,6 +13,8 @@ import type { World } from './world';
 
 const D = RULES.deer;
 const TAU = Math.PI * 2;
+/** Distance at which the hunting Deer stops advancing (inside the 2 m swing range). */
+const HOLD_RANGE = 1.7;
 
 export function newDeer(): DeerState {
   return {
@@ -45,6 +47,7 @@ export function newDeer(): DeerState {
     goalX: 0,
     goalZ: 0,
     nearMiss: 99,
+    search: null,
   };
 }
 
@@ -74,12 +77,17 @@ function perceives(w: World): boolean {
 function moveToward(w: World, goal: V2, speed: number): number {
   const d = w.state.deer;
   const nav = w.forest.nav;
+  // The bright circle is not on the nav grid (its radius follows the fuel). While
+  // the goal is outside it, plan around it like around any other obstacle;
+  // otherwise a hunt across the fire pushes against the rim until it times out.
+  const rim = w.radius + 0.3; // just inside the 0.4 m margin keepOut() holds, so a step along the rim counts as free
+  const avoid = w.state.bright && Math.hypot(goal.x, goal.z) > rim ? rim : 0;
   let target = goal;
-  if (!nav.segmentFree(d, goal)) {
+  if (!nav.segmentFree(d, goal, avoid)) {
     d.repath -= DT;
     const moved = Math.hypot(goal.x - d.goalX, goal.z - d.goalZ);
     if (d.repath <= 0 || moved > 1.5 || d.path.length === 0) {
-      d.path = nav.findPath(d, goal) ?? [];
+      d.path = nav.findPath(d, goal, avoid) ?? [];
       d.repath = 0.25; // at most 4 searches per second
       d.goalX = goal.x;
       d.goalZ = goal.z;
@@ -102,6 +110,12 @@ function moveToward(w: World, goal: V2, speed: number): number {
 function keepOut(w: World): void {
   const d = w.state.deer;
   resolveCircle(w.forest.obstacles, d, D.radius * 0.8, RULES.world.radius - 1);
+  rimOut(w);
+}
+
+/** The Deer never stands inside the bright circle. */
+function rimOut(w: World): void {
+  const d = w.state.deer;
   if (w.state.bright) {
     const edge = w.radius + 0.4;
     const r = Math.hypot(d.x, d.z);
@@ -136,6 +150,7 @@ function startCue(w: World, second: boolean): void {
     d.maneuver = pickManeuver(w);
     d.maneuverUsed = false;
     d.detour = null;
+    d.search = null;
     d.lostT = 0;
     // Stage 5: the charge line is fixed when the signal starts.
     const len = dist(d, aim) || 1;
@@ -217,7 +232,7 @@ export function stepDeer(w: World): void {
     }
     case 'stalk': {
       // Hold 2–5 m beyond the edge of bright light, switching sides every 6–10 s.
-      const ring = Math.max(w.radius, 5.5) + 3.5;
+      const ring = Math.max(w.radius, 5.5) + 2.8;
       const ang = Math.atan2(d.z, d.x) + (d.orbitDir * 1.4) / ring;
       const r = Math.hypot(d.x, d.z);
       const goal = { x: Math.cos(ang) * ring, z: Math.sin(ang) * ring };
@@ -303,14 +318,28 @@ export function stepDeer(w: World): void {
           }
         }
         let goal: V2;
+        let searching = false;
         if (d.detour) {
           goal = d.detour;
           if (dist(d, d.detour) < 0.9) d.detour = null;
         } else if (sees) goal = pl;
         else if (d.lastKnown) goal = d.lastKnown;
-        else goal = nearestPost(w);
-        const left = moveToward(w, goal, huntSpeed(n));
-        if (!sees && d.lostT >= D.lostSeconds && (left < 1.2 || d.lostT >= 9)) {
+        else {
+          // Nothing seen or heard: check the tag posts one by one, nearest first.
+          searching = true;
+          if (!d.search) d.search = searchOrder(w);
+          while (d.search.length && dist(d, w.forest.posts[d.search[0]]) < 2.2) d.search.shift();
+          if (!d.search.length) {
+            startRetreat(w);
+            break;
+          }
+          goal = w.forest.posts[d.search[0]];
+        }
+        // Close in to arm's reach and hold there: the body stays in front of the player between swings.
+        const hold = sees && !d.detour && dist(d, pl) <= HOLD_RANGE;
+        if (hold) face(d, pl, 0.3);
+        const left = hold ? dist(d, pl) : moveToward(w, goal, huntSpeed(n));
+        if (!sees && !searching && d.lostT >= D.lostSeconds && (left < 1.2 || d.lostT >= 9)) {
           startRetreat(w);
           break;
         }
@@ -323,19 +352,24 @@ export function stepDeer(w: World): void {
         startRetreat(w);
         break;
       }
-      d.chargeLeft -= DT;
-      d.x += d.chargeX * D.chargeSpeed * DT;
-      d.z += d.chargeZ * D.chargeSpeed * DT;
-      d.heading = Math.atan2(d.chargeZ, d.chargeX);
-      keepOut(w);
-      if (d.chargeLeft <= 0 || dist(d, pl) <= 1.6) startSwing(w);
+      if (d.chargeLeft > 0 && dist(d, pl) > HOLD_RANGE) {
+        d.chargeLeft -= DT;
+        d.x += d.chargeX * D.chargeSpeed * DT;
+        d.z += d.chargeZ * D.chargeSpeed * DT;
+        d.heading = Math.atan2(d.chargeZ, d.chargeX);
+        keepOut(w);
+      } else if (d.sinceSwing >= D.swingGap) startSwing(w); // the 2.4 s gap holds for the second lunge too
       break;
     }
     case 'swing':
       // Direction is locked; the hit itself is resolved in resolveSwing after protection is known.
       break;
     case 'recover': {
-      if (d.timer >= D.recoverSeconds) setMode(w, prot ? 'retreat' : 'hunt');
+      if (d.timer >= D.recoverSeconds) {
+        // A real retreat (threat reset, path cleared, `deerRetreat` event), not just the mode flag.
+        if (prot) startRetreat(w);
+        else setMode(w, 'hunt');
+      }
       break;
     }
     case 'stunned': {
@@ -358,6 +392,9 @@ export function stepDeer(w: World): void {
     }
   }
 
+  // A feed can grow the bright circle over a standing Deer: it steps back to the rim at once.
+  rimOut(w);
+
   // Footfall cue for audio and subtitles.
   const moved = Math.hypot(d.x - ox, d.z - oz);
   if (moved > 0.01) {
@@ -366,11 +403,13 @@ export function stepDeer(w: World): void {
   }
 }
 
-function nearestPost(w: World): V2 {
+/** Posts to check during a blind hunt: an open cache first, then by distance. */
+function searchOrder(w: World): number[] {
   const d = w.state.deer;
-  const open = w.state.caches.find((c) => c.status === 'open');
-  if (open) return w.forest.posts[open.post];
-  return [...w.forest.posts].sort((a, b) => dist(a, d) - dist(b, d))[0];
+  const open = w.state.caches.find((c) => c.status === 'open')?.post;
+  return w.forest.posts
+    .map((_, i) => i)
+    .sort((a, b) => (a === open ? -1 : b === open ? 1 : dist(w.forest.posts[a], d) - dist(w.forest.posts[b], d)));
 }
 
 function startSwing(w: World): void {
@@ -401,7 +440,7 @@ export function resolveSwing(w: World): void {
   const dd = Math.hypot(dx, dz);
   const cos = dd < 0.01 ? 1 : (dx * d.swingDirX + dz * d.swingDirZ) / dd;
   const inArc = cos >= Math.cos(((D.swingArcDeg / 2) * Math.PI) / 180);
-  const hit = dd <= D.swingRange + 0.1 && inArc && lineOfSight(w.forest.obstacles, d, pl);
+  const hit = dd <= D.swingRange && inArc && lineOfSight(w.forest.obstacles, d, pl);
   if (hit && pl.invuln <= 0) {
     w.damagePlayer(D.damage);
     if (s.phase !== 'night') return;

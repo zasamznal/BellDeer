@@ -47,6 +47,7 @@ export interface DeerState {
   goalX: number;
   goalZ: number;
   nearMiss: number; // closest missed swing distance this run (for the result card)
+  search: number[] | null; // posts left to check during a hunt with no sighting
 }
 
 export interface TrapState {
