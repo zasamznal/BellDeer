@@ -42,6 +42,7 @@ function inView(w: World, p: { x: number; z: number }, maxDist: number, minCos: 
 
 export class IdeasUi {
   private scoreEl: HTMLElement;
+  private scoreLabel: HTMLElement;
   private scoreVal: HTMLElement;
   private scorePop: HTMLElement;
   private omenEl: HTMLElement;
@@ -72,6 +73,7 @@ export class IdeasUi {
     this.scoreEl = make('div', 'ideasScore', root, overlays);
     this.scoreEl.innerHTML = '<span id="ideasScorePop"></span><em></em><b></b>';
     this.scorePop = this.scoreEl.querySelector('span')!;
+    this.scoreLabel = this.scoreEl.querySelector('em')!;
     this.scoreVal = this.scoreEl.querySelector('b')!;
     this.banner = make('div', 'ideasBanner', root, overlays);
     // The two washes go under every HUD element, so the fuel bar and the counters stay readable through them.
@@ -88,6 +90,13 @@ export class IdeasUi {
     if (html) el.innerHTML = value;
     else el.textContent = value;
     return true;
+  }
+
+  private fade(el: HTMLElement, key: string, opacity: number): void {
+    const v = opacity.toFixed(3);
+    if (this.cache[key] === v) return;
+    this.cache[key] = v;
+    el.style.opacity = v;
   }
 
   // ------------------------------------------------------------ 10. slow motion
@@ -191,7 +200,6 @@ export class IdeasUi {
   frame(w: World, dt: number, now: number, playing: boolean): void {
     const s = w.state;
     const I = s.ideas;
-    const pl = s.player;
     const night = s.phase === 'night';
 
     // 1. Threat pulse: only at night, outside protection, while the meter is running.
@@ -201,12 +209,12 @@ export class IdeasUi {
     this.level = level >= this.level ? level : Math.max(level, this.level - dt * 4);
     // With the brightness pulse switched off the edges stay evenly dark instead of throbbing.
     const edge = this.level * (this.view.settings.flash ? 0.16 + 0.66 * beat : 0.42);
-    this.pulse.style.opacity = edge.toFixed(3);
-    this.cold.style.opacity = (((1 - this.scale) / (1 - IDEAS.slow.scale)) * 0.95).toFixed(3);
+    this.fade(this.pulse, 'pulse', edge);
+    this.fade(this.cold, 'cold', ((1 - this.scale) / (1 - IDEAS.slow.scale)) * 0.95);
 
     // 9. Score.
     this.scoreEl.hidden = !IDEAS.score;
-    this.set(this.scoreEl.querySelector('em')!, 'heat', t('heat'));
+    this.set(this.scoreLabel, 'heat', t('heat'));
     this.set(this.scoreVal, 'score', String(s.stats.score));
 
     // 2 + 7. Omen word to the right of the phase label, from the dusk announcement to dawn.
@@ -231,7 +239,7 @@ export class IdeasUi {
       let prog = '';
       if (I.challenge === 'bothTags') prog = `${Math.min(2, I.nightBanked)}/2`;
       else if (I.challenge === 'outside') prog = `${Math.min(C.outsideSeconds, Math.floor(I.outsideTicks / TICK_HZ))}/${C.outsideSeconds}`;
-      else if (I.challenge === 'lateFeed' && night && !I.challengeDone) prog = `0:${String(Math.min(C.lateFeedSecond, Math.floor(s.t))).padStart(2, '0')}`;
+      else if (I.challenge === 'lateFeed' && night) prog = `${Math.min(C.lateFeedSecond, Math.floor(s.t))}/${C.lateFeedSecond}`;
       const state = I.challengeFailed ? 'failed' : I.challengeDone ? 'done' : '';
       this.set(this.chEl, 'ch', `<i class="ideas-box"></i><span>${t('ch_' + I.challenge)}</span>${prog && !state ? `<small>${prog}</small>` : ''}`, true);
       if (this.cache.chCls !== state) this.chEl.className = this.cache.chCls = state;
@@ -244,7 +252,6 @@ export class IdeasUi {
     }
 
     if (playing) this.hints(w, now, bannerOn);
-    void pl;
   }
 
   /** One-time discoverability: each hint is shown once ever, and never over another hint. */

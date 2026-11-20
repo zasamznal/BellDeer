@@ -581,7 +581,14 @@ describe('tin lure', () => {
   it('a trunk in the way stops the tin at its foot', () => {
     const { w, pl } = lureWorld();
     hideDeer(w);
-    const tree = w.forest.obstacles.filter((o) => o.kind === 'tree' && d2(o, pl) < 13 && segClear(w, pl, add(pl, { x: (o.x - pl.x) / d2(o, pl), z: (o.z - pl.z) / d2(o, pl) }, d2(o, pl) - o.r - 0.5), 0.3)).sort((a, b) => d2(a, pl) - d2(b, pl))[0];
+    // The nearest tree with nothing else on the way to it.
+    const tree = w.forest.obstacles
+      .filter((o) => {
+        const d = d2(o, pl);
+        const toward = { x: (o.x - pl.x) / d, z: (o.z - pl.z) / d };
+        return o.kind === 'tree' && d < 13 && segClear(w, pl, add(pl, toward, d - o.r - 0.5), 0.3);
+      })
+      .sort((a, b) => d2(a, pl) - d2(b, pl))[0];
     expect(tree).toBeDefined();
     const ev = tick(w, { ...emptyInput(), yaw: yawTo(tree.x - pl.x, tree.z - pl.z), pitch: 0, lure: true });
     const e = lureEvent(ev)!;

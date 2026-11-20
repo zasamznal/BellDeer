@@ -64,9 +64,9 @@ export class IdeasView {
       new THREE.BufferGeometry(),
       new THREE.PointsMaterial({ color: '#ffe0a0', size: 6, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
-    const can = new THREE.CylinderGeometry(0.05, 0.05, 0.12, 8);
+    const can = new THREE.CylinderGeometry(0.065, 0.065, 0.16, 8);
     can.rotateZ(Math.PI / 2);
-    this.tin = new THREE.Mesh(can, new THREE.MeshLambertMaterial({ color: '#b9c6cf', emissive: '#2c3a46', flatShading: true }));
+    this.tin = new THREE.Mesh(can, new THREE.MeshLambertMaterial({ color: '#c3d0d9', emissive: '#4a5c6c', flatShading: true }));
     for (const o of [this.tracks, this.resin, this.glint, this.tin]) {
       o.visible = false;
       this.group.add(o);
@@ -75,7 +75,7 @@ export class IdeasView {
 
   onEvent(e: SimEvent): void {
     if (e.type === 'lure') {
-      this.tin.position.set(e.x, 0.06, e.z);
+      this.tin.position.set(e.x, 0.075, e.z);
       this.tin.rotation.y = Math.random() * 6.283;
       this.tinT = 7;
     }
@@ -142,7 +142,7 @@ export class IdeasView {
       this.tinT -= dt;
       const age = 7 - this.tinT;
       this.tin.visible = this.tinT > 0;
-      this.tin.position.y = 0.06 + Math.abs(Math.sin(age * 11)) * 0.28 * Math.max(0, 1 - age / 0.7);
+      this.tin.position.y = 0.075 + Math.abs(Math.sin(age * 11)) * 0.28 * Math.max(0, 1 - age / 0.7);
       this.tin.rotation.x = Math.max(0, 1 - age / 0.7) * age * 14;
     } else this.tin.visible = false;
 

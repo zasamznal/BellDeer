@@ -274,7 +274,7 @@ export interface OmenMods {
   hunt: number;
 }
 
-export function omenMods(omen: Omen | undefined): OmenMods {
+function buildOmenMods(omen: Omen): OmenMods {
   const o = IDEAS.omen;
   const m: OmenMods = { sight: RULES.deer.sight, burn: 1, moveNoise: 1, chopNoise: 1, threat: 1, hunt: 0 };
   if (omen === 'fog') m.sight = o.fogSight;
@@ -291,4 +291,19 @@ export function omenMods(omen: Omen | undefined): OmenMods {
     m.hunt = IDEAS.bell.huntBonus;
   }
   return m;
+}
+
+// The simulation asks several times a tick, so the six sets are built once.
+const OMEN_MODS: Record<Omen, OmenMods> = {
+  calm: buildOmenMods('calm'),
+  fog: buildOmenMods('fog'),
+  wind: buildOmenMods('wind'),
+  moon: buildOmenMods('moon'),
+  still: buildOmenMods('still'),
+  bell: buildOmenMods('bell'),
+};
+
+/** Modifiers of an omen; anything unknown (an old save) counts as calm. Treat the result as read-only. */
+export function omenMods(omen: Omen | undefined): OmenMods {
+  return (omen && OMEN_MODS[omen]) || OMEN_MODS.calm;
 }
