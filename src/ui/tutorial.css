@@ -1,0 +1,54 @@
+/* First-run tutorial (src/ui/tutorial.ts). The note and the marker are children
+   of #hud: they inherit its typeface and --u scale and are hidden together with
+   the rest of the HUD while a full-screen overlay is open (#hud.menu > *). */
+
+/* The keeper's note: left edge, upper third, clear of the phase label (top
+   centre), the toasts (top right), the prompt (centre) and the fuel row. */
+#tut {
+  position: absolute;
+  left: calc(var(--u) * 1.3);
+  top: 24%;
+  max-width: calc(var(--u) * 23);
+  padding: 0.5em 0.95em 0.55em 0.85em;
+  border-left: 2px solid var(--amber);
+  background: rgba(10, 13, 20, 0.58);
+  color: var(--ink);
+  font-size: calc(var(--u) * 0.95);
+  line-height: 1.5;
+  text-wrap: pretty;
+  opacity: 0;
+  transform: translateX(-0.9em);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+#tut.on { opacity: 1; transform: none; }
+#tut.swift { transition-duration: 0.14s; }
+
+#tut .line { transition: color 0.3s; }
+#tut .row { display: block; }
+#tut .key { margin: 0 0.12em; min-width: 1.6em; height: 1.6em; padding: 0 0.34em; font-size: 0.86em; line-height: 1; vertical-align: 0.06em; text-shadow: none; }
+
+/* Step done: the tick draws itself after the last word (its place is always reserved) and the text steps back. */
+#tut .tick { display: inline-block; width: 0.85em; height: 0.85em; vertical-align: -0.08em; color: var(--amber); }
+#tut .tick svg { display: block; width: 100%; height: 100%; overflow: visible; }
+#tut .tick path { stroke-dasharray: 13; stroke-dashoffset: 13; transition: stroke-dashoffset 0.3s ease; }
+#tut.done .tick path { stroke-dashoffset: 0; }
+#tut.done .line { color: var(--ink-dim); }
+
+/* W A S D row: only when the player has stood still since the first chop. */
+#tut .keys { display: none; gap: 0.3em; margin-top: 0.5em; }
+#tut.wasd .keys { display: flex; }
+#tut .keys .key { margin: 0; }
+
+/* World marker: amber diamond + distance, projected through the camera. */
+#tutMark { position: absolute; left: 0; top: 0; width: 0; height: 0; font-size: calc(var(--u) * 0.9); opacity: 0; transition: opacity 0.22s; will-change: transform; }
+#tutMark.on { opacity: 1; }
+#tutMark .gem { position: absolute; left: -0.36em; top: -0.36em; width: 0.72em; height: 0.72em; background: var(--amber); transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(10, 13, 20, 0.75), 0 0 0.7em rgba(233, 162, 59, 0.5); }
+#tutMark .dist { position: absolute; left: 1.05em; top: -0.78em; padding: 0 0.4em; line-height: 1.56; white-space: nowrap; letter-spacing: 0.04em; color: var(--amber); background: rgba(10, 13, 20, 0.55); border-radius: 2px; }
+#tutMark.flip .dist { left: auto; right: 1.05em; }
+/* Off-screen target: the marker waits on the screen edge and the arrow points the way. */
+#tutMark .arrow { position: absolute; left: 0; top: -0.36em; width: 0; height: 0; border-left: 0.56em solid var(--amber); border-top: 0.36em solid transparent; border-bottom: 0.36em solid transparent; transform-origin: 0 50%; opacity: 0; filter: drop-shadow(0 0 1px rgba(10, 13, 20, 0.9)); }
+#tutMark.edge .arrow { opacity: 1; }
+
+/* The first dawn: one small line above the cards (inserted into the draft screen). */
+.tut-draft { padding: 0.3em 0.9em 0.35em 0.8em; border-left: 2px solid var(--amber); background: rgba(10, 13, 20, 0.5); color: var(--ink); font-size: 0.9em; line-height: 1.5; text-align: left; }
+.tut-draft .key { margin: 0 0.12em; min-width: 1.6em; height: 1.6em; padding: 0 0.34em; font-size: 0.86em; line-height: 1; vertical-align: 0.06em; }

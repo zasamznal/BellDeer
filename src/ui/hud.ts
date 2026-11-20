@@ -33,6 +33,7 @@ export type Action =
   | 'flash'
   | 'subs'
   | 'low'
+  | 'tutorial' // settings row of the first-run tutorial (src/ui/tutorial.ts)
   | 'skip'
   | 'reroll'
   | 'nextDay'
@@ -336,6 +337,7 @@ export class Hud {
       `<span>${t('shake')}</span>${tog('shake', s.shake)}` +
       `<span>${t('flash')}</span>${tog('flash', s.flash)}` +
       `<span>${t('lowQuality')}</span>${tog('low', lowQ)}` +
+      `<span>${t('tutorial')}</span>${tog('tutorial', s.tutorial)}` + // label comes from src/ui/tutorialStrings.ts
       `</div>`
     );
   }

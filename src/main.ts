@@ -12,6 +12,7 @@ import { loadFonts } from './ui/fonts';
 import { type Action, Hud, type ScreenKind } from './ui/hud';
 import { detectLang, getLang, setLang, t } from './ui/i18n';
 import { saveResultCard } from './ui/resultCard';
+import { Tutorial } from './ui/tutorial';
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
@@ -24,6 +25,8 @@ class App {
   private audio = new Audio();
   private view = new SceneView(this.canvas);
   private hud: Hud;
+  // First-run tutorial: keeper's notes and the world marker, all in src/ui/tutorial.ts.
+  private tutorial = new Tutorial({ store: this.store, project: (x, y, z) => this.view.project(x, y, z), sound: () => this.audio.tutorialTick(), hush: () => this.hud.clearHint() });
   world!: World;
   private mode: 'title' | 'play' | 'pause' | 'session' = 'title';
   private chapterPanel = false;
@@ -337,6 +340,9 @@ class App {
         this.view.setLowQuality(st.lowQuality, true);
         this.store.saveProfile();
         break;
+      case 'tutorial': // settings row: off hides the tutorial at once, on arms it for the next new run
+        this.tutorial.toggle();
+        break;
       case 'skip':
         if (skipCard(w)) this.afterPick('skip');
         break;
@@ -458,6 +464,7 @@ class App {
     const now = this.now;
     for (const e of w.drainEvents()) {
       this.view.onEvent(e, w);
+      this.tutorial.onEvent(e); // tutorial steps tick off from the same events
       switch (e.type) {
         case 'chopHit':
           a.chop();
@@ -466,7 +473,7 @@ class App {
           a.timber();
           hud.toast(t('tLogs', { n: e.logs }));
           if (w.state.stats.logsChopped === e.logs) track('first_chop', { t: w.state.t });
-          if (!w.state.fedOnce) hud.setHint(t('hintFire'), now, 7);
+          if (!w.state.fedOnce && !this.tutorial.active) hud.setHint(t('hintFire'), now, 7); // tutorial replaces this hint
           break;
         case 'feed':
           a.feed();
@@ -516,7 +523,7 @@ class App {
         case 'cacheOpen': {
           const p = w.forest.posts[e.post];
           a.tin(p.x, p.z);
-          if (!w.state.player.lightOn && w.state.stats.cachesClaimed === 0) hud.setHint(t('hintLight'), now, 5);
+          if (!w.state.player.lightOn && w.state.stats.cachesClaimed === 0 && !this.tutorial.active) hud.setHint(t('hintLight'), now, 5); // tutorial replaces this hint
           break;
         }
         case 'cacheRevealed':
@@ -547,7 +554,7 @@ class App {
           break;
         case 'nightStart':
           track('night_start', { n: e.n });
-          if (e.n === 1) hud.setHint(t('hintNight'), now, 8);
+          if (e.n === 1 && !this.tutorial.active) hud.setHint(t('hintNight'), now, 8); // tutorial replaces this hint
           break;
         case 'duskStep':
           a.deerStep(e.x, e.z, false);
@@ -690,6 +697,7 @@ class App {
     this.hud.show(screen, w, this.store.profile, this.store.run, this.view.lowQuality, this.confirmNew);
     this.hud.update(w, this.now, this.view.hitPulse, this.view.settings.flash);
     document.getElementById('hud')!.classList.toggle('menu', screen !== 'none');
+    this.tutorial.frame(w, screen, dt); // tutorial: note card, world marker, the line on the first draft screen
 
     if (DEBUG) this.debug(dt);
   }
@@ -702,7 +710,7 @@ class App {
       this.moved = true;
       this.hud.clearHint();
     }
-    if (s.night === 1 && s.phase === 'day' && !this.moved && s.dayStarted && s.t > 3 && s.t < 3.1) this.hud.setHint(t('hintMove'), this.now, 6);
+    if (s.night === 1 && s.phase === 'day' && !this.moved && s.dayStarted && s.t > 3 && s.t < 3.1 && !this.tutorial.active) this.hud.setHint(t('hintMove'), this.now, 6); // tutorial replaces this hint
     if (s.phase === 'day' && s.t >= 52 && !this.birdsNoted) {
       this.birdsNoted = true;
       this.hud.subtitle(t('sBirds'), this.now);

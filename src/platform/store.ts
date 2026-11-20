@@ -15,6 +15,8 @@ export interface Settings {
   flash: boolean;
   subtitles: boolean;
   lowQuality: boolean;
+  /** Tutorial switch: the next new run starts the first-run tutorial (src/ui/tutorial.ts). */
+  tutorial: boolean;
 }
 
 export interface Profile {
@@ -24,6 +26,8 @@ export interface Profile {
   seenStages: number[];
   seals: number[];
   bonusTrap: boolean;
+  /** The first-run tutorial was played through to the first dawn's card. */
+  tutorialDone: boolean;
   settings: Settings;
 }
 
@@ -48,7 +52,8 @@ export const defaultProfile = (): Profile => ({
   seenStages: [],
   seals: [],
   bonusTrap: false,
-  settings: { lang: null, volume: 0.8, effects: 1, shake: true, flash: true, subtitles: true, lowQuality: false },
+  tutorialDone: false,
+  settings: { lang: null, volume: 0.8, effects: 1, shake: true, flash: true, subtitles: true, lowQuality: false, tutorial: true },
 });
 
 function validRun(r: unknown): r is RunState {
