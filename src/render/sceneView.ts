@@ -111,6 +111,7 @@ export class SceneView {
   private basePixelRatio = 1;
   private frameAvg = 16;
   private slowFor = 0;
+  private autoQuality = true;
   lowQuality = false;
   /** Title screen: night hero shot across the fire with the Deer on the trail. */
   titleMode = false;
@@ -219,14 +220,14 @@ export class SceneView {
     cam.add(this.lightModel);
     this.torchModel = new THREE.Group();
     this.torchModel.add(new THREE.Mesh(P.torchGeometry(), this.wood));
-    const tf = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.24, 4), new THREE.MeshBasicMaterial({ color: '#ffb050', fog: false, toneMapped: false }));
+    const tf = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.24, 4), new THREE.MeshBasicMaterial({ color: '#ffb050', fog: false, toneMapped: false }));
     tf.position.y = 0.5;
     this.torchModel.add(tf);
     cam.add(this.torchModel);
 
     this.handLight.position.set(0.1, -0.1, 0);
     cam.add(this.handLight);
-    this.spot.position.set(-0.22, -0.2, -0.62);
+    this.spot.position.set(-0.21, -0.19, -0.72);
     this.spot.target.position.set(-0.06, -0.5, -7);
     cam.add(this.spot, this.spot.target);
     this.torchLight.position.set(-0.3, 0.2, -0.3);
@@ -235,8 +236,12 @@ export class SceneView {
     const bg = new THREE.ConeGeometry(1, 1, 16, 1, true);
     bg.translate(0, -0.5, 0);
     bg.rotateX(Math.PI / 2);
-    this.beam = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: '#b9d2ff', transparent: true, opacity: 0.05, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-    this.beam.position.set(-0.22, -0.22, -0.62);
+    const bp = bg.getAttribute('position');
+    const bc = new Float32Array(bp.count * 3);
+    for (let i = 0; i < bp.count; i++) bc.fill(Math.max(0, 1 + bp.getZ(i)) ** 2, i * 3, i * 3 + 3);
+    bg.setAttribute('color', new THREE.Float32BufferAttribute(bc, 3));
+    this.beam = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: '#b9d2ff', vertexColors: true, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    this.beam.position.set(-0.21, -0.19, -0.72);
     this.beam.rotation.x = -0.05;
     this.beam.scale.set(1.0, 1.0, 9);
     cam.add(this.beam);
@@ -319,9 +324,9 @@ export class SceneView {
     }
 
     // Ferns and red leaf clumps (density drops on low quality).
-    srand(f.seed + 9);
     const fernN = 620;
     const ferns = new THREE.InstancedMesh(P.fernGeometry(), this.woodDouble, fernN);
+    srand(f.seed + 9); // after the geometry, which reseeds internally
     let placed = 0;
     for (let tries = 0; tries < 6000 && placed < fernN; tries++) {
       const a = rnd() * 6.283;
@@ -367,8 +372,8 @@ export class SceneView {
     const postGeo = P.postGeometry();
     const tagGeo = P.tagGeometry();
     f.posts.forEach((n) => {
-      // The crossbar points along the trail so the tag hangs beside the post.
-      const rot = Math.atan2(n.x, n.z) + Math.PI / 2;
+      // The crossbar lies across the trail, so from camp the T is seen broadside with the tag beside it.
+      const rot = Math.atan2(n.x, n.z);
       at(new THREE.Mesh(postGeo, this.wood), n.x, n.z, rot);
       const mat = new THREE.MeshLambertMaterial({ color: P.PALETTE.tin, emissive: '#000000', flatShading: true });
       const tag = new THREE.Mesh(tagGeo, mat);
@@ -442,10 +447,14 @@ export class SceneView {
   private watchFrame(dt: number): void {
     this.frameAvg = lerp(this.frameAvg, dt * 1000, 0.05);
     if (this.lowQuality) return;
+    if (!this.autoQuality) return;
     this.slowFor = this.frameAvg > 21 ? this.slowFor + dt : 0;
     if (this.slowFor > 2.5) this.setLowQuality(true);
   }
-  setLowQuality(on: boolean): void {
+  /** `manual` = the player's own choice: automatic switching stays off afterwards. */
+  setLowQuality(on: boolean, manual = false): void {
+    if (manual) this.autoQuality = false;
+    this.slowFor = 0;
     this.lowQuality = on;
     this.scale = on ? 0.75 : 1;
     if (this.ferns) this.ferns.count = Math.floor(this.fernCount * (on ? 0.4 : 1));
@@ -634,13 +643,13 @@ export class SceneView {
     const chopping = pl.chop > 0;
     const sw = chopping ? Math.sin(Math.min(1, ((pl.chop % 0.5) / 0.5) * 1.15) * Math.PI) : 0;
     const sway = Math.sin(this.bob) * 0.012;
-    this.axe.position.set(0.37 - sw * 0.24 + sway, -0.25 + Math.abs(Math.cos(this.bob)) * 0.012 + sw * 0.06, -0.56 - sw * 0.1);
+    this.axe.position.set(0.42 - sw * 0.26 + sway, -0.2 + Math.abs(Math.cos(this.bob)) * 0.012 + sw * 0.06, -0.78 - sw * 0.06);
     this.axe.rotation.set(-0.22 - sw * 0.9, 0.42 + sw * 0.3, -0.16 + sw * 0.8);
     const holdLight = pl.lightOn && !title;
     this.axe.visible = !title;
     this.lightModel.visible = holdLight;
-    this.lightModel.position.set(-0.22 + sway, -0.25, -0.46);
-    this.lightModel.rotation.set(-0.05, -0.1, 0);
+    this.lightModel.position.set(-0.24 + sway, -0.2, -0.55);
+    this.lightModel.rotation.set(0.06, -0.22, 0);
     this.torchModel.visible = pl.torch > 0 && !title;
     this.torchModel.position.set(-0.34 + sway, -0.3, -0.5);
     this.torchModel.rotation.set(0.1, 0, 0.12);
