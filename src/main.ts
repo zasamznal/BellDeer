@@ -3,6 +3,7 @@
 import './ui/style.css';
 import { Audio } from './audio/audio';
 import { Platform, RunStore, analyticsLog, track } from './platform/store';
+import { preloadModels } from './render/assets';
 import { SceneView } from './render/sceneView';
 import { pickCard, replaceCard, reroll, skipCard } from './sim/draft';
 import { DT, RULES } from './sim/rules';
@@ -752,6 +753,9 @@ class App {
   };
 }
 
-const app = new App();
-(window as unknown as { __bd: App['api'] }).__bd = app.api;
+// Models are small (about 1.3 MB together); wait for them so the first frame is the final look.
+void preloadModels().then(() => {
+  const app = new App();
+  (window as unknown as { __bd: App['api'] }).__bd = app.api;
+});
 void RULES;

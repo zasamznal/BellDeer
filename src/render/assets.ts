@@ -100,3 +100,9 @@ export async function upgradeMesh(host: THREE.Mesh, name: string, fit: Fit, opts
   host.add(model);
   return model;
 }
+
+/** Fetch every bundled model up front so nothing pops in after the first frame. */
+export function preloadModels(timeoutMs = 6000): Promise<void> {
+  const all = Promise.all(Object.keys(glbUrls).map((k) => loadModel(k.replace(/^.*\/|\.glb$/g, '')))).then(() => undefined);
+  return Promise.race([all, new Promise<void>((r) => setTimeout(r, timeoutMs))]);
+}

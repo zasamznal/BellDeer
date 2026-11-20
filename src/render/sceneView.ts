@@ -194,11 +194,22 @@ export class SceneView {
     this.flames.frustumCulled = false;
     this.scene.add(this.flames);
 
+    // Soft round sprite for embers and ring sparks (square points read as pixels).
+    const dot = document.createElement('canvas');
+    dot.width = dot.height = 32;
+    const dc = dot.getContext('2d')!;
+    const grad = dc.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.75)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    dc.fillStyle = grad;
+    dc.fillRect(0, 0, 32, 32);
+    const spark = new THREE.CanvasTexture(dot);
     const n = 36;
     const eg = new THREE.BufferGeometry();
     eg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
     eg.setAttribute('seed', new THREE.Float32BufferAttribute(Array.from({ length: n }, () => Math.random()), 1));
-    this.embers = new THREE.Points(eg, new THREE.PointsMaterial({ color: '#ffb060', size: 0.07, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
+    this.embers = new THREE.Points(eg, new THREE.PointsMaterial({ map: spark, color: '#ffb060', size: 0.11, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
     this.embers.frustumCulled = false;
     this.scene.add(this.embers);
 
@@ -219,7 +230,7 @@ export class SceneView {
       sp[i * 3 + 2] = Math.sin(a) * r;
     }
     sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
-    this.ringSparks = new THREE.Points(sg, new THREE.PointsMaterial({ color: P.PALETTE.flame, size: 0.09, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
+    this.ringSparks = new THREE.Points(sg, new THREE.PointsMaterial({ map: spark, color: P.PALETTE.flame, size: 0.13, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
     this.ringSparks.frustumCulled = false;
     this.scene.add(this.ringSparks);
   }
