@@ -336,7 +336,7 @@ describe('perception', () => {
 // ------------------------------------------------------------------ FSM
 
 describe('patrol, stalking and provocations', () => {
-  it('at dusk the Deer steps out on the 18–26 m ring, on the far side from the player', () => {
+  it('at dusk the Deer steps out on the 18–26 m ring, where the tracks of the day pointed', () => {
     for (const seed of [1, 2, 3, 5, 8, 13]) {
       const w = nightWorld(seed);
       const s = w.state;
@@ -344,8 +344,10 @@ describe('patrol, stalking and provocations', () => {
       expect(d.mode).toBe('patrol');
       expect(hyp(d)).toBeGreaterThanOrEqual(18);
       expect(hyp(d)).toBeLessThanOrEqual(26);
-      // Player at (1.5, 1.5): the Deer is in the opposite half-plane.
-      expect(d.x * s.player.x + d.z * s.player.z).toBeLessThan(0);
+      // Rule change (tracks by day): the entry point is no longer "opposite the player" but the
+      // direction fixed at the start of the day, within the ±0.15 rad jitter and one nav cell.
+      const tr = s.ideas.tracks!;
+      expect(d2(d, { x: Math.cos(tr.angle) * 22, z: Math.sin(tr.angle) * 22 })).toBeLessThan(22 * 0.15 + 2.5);
       // Patrol lasts at most 4 s before it turns into stalking.
       s.fuel = 75;
       const left = runUntil(w, 6, () => d.mode !== 'patrol', atFire(w));

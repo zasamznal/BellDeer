@@ -92,8 +92,11 @@ function auditedStep(w: World, input: Input, a: Audit, swingStart: { t: number }
 function draftFirstCard(w: World): void {
   const s = w.state;
   expect(s.hand).not.toBeNull();
-  expect(s.hand!.length).toBe(3);
-  expect(new Set(s.hand).size).toBe(3);
+  // Rule change (night challenges): a completed challenge deals four cards instead of three.
+  // These runs play their days tick by tick, so from night 2 on they meet omens, challenges and bell nights.
+  const size = s.ideas.dawnFour ? 4 : 3;
+  expect(s.hand!.length).toBe(size);
+  expect(new Set(s.hand).size).toBe(size);
   for (const id of s.hand!) expect(s.cards).not.toContain(id);
   const r = pickCard(w, 0);
   if (r === 'needReplace') expect(replaceCard(w, 0)).toBe(true);
