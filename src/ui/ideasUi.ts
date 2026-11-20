@@ -197,7 +197,7 @@ export class IdeasUi {
 
   // ------------------------------------------------------------ frame
 
-  frame(w: World, dt: number, now: number, playing: boolean): void {
+  frame(w: World, dt: number, now: number, playing: boolean, quiet = false): void {
     const s = w.state;
     const I = s.ideas;
     const night = s.phase === 'night';
@@ -251,7 +251,7 @@ export class IdeasUi {
       this.banner.classList.toggle('on', bannerOn);
     }
 
-    if (playing) this.hints(w, now, bannerOn);
+    if (playing && !quiet) this.hints(w, now, bannerOn);
   }
 
   /** One-time discoverability: each hint is shown once ever, and never over another hint. */

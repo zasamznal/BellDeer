@@ -747,6 +747,18 @@ export class SceneView {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * Tutorial marker hook: a world point as normalised screen coordinates (−1..1, x right, y up)
+   * for the camera of the last rendered frame. Behind the camera the coordinates are mirrored
+   * back, so their signs still say on which side the point lies.
+   */
+  project(x: number, y: number, z: number): { x: number; y: number; behind: boolean } {
+    const v = new THREE.Vector3(x, y, z).applyMatrix4(this.camera.matrixWorldInverse);
+    const behind = v.z >= 0;
+    v.applyMatrix4(this.camera.projectionMatrix);
+    return behind ? { x: -v.x, y: -v.y, behind } : { x: v.x, y: v.y, behind };
+  }
+
   get info(): { calls: number; triangles: number } {
     return { calls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles };
   }

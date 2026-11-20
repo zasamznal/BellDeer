@@ -273,6 +273,13 @@ export class Audio {
     this.tone(o, 2100, 2100, 0.3, 0.14, 'triangle');
     this.tone(o, 3150, 3150, 0.4, 0.1, 'triangle', 0.09);
   }
+  /** Tutorial step ticked off: two soft low notes, quieter than any gameplay cue. */
+  tutorialTick(): void {
+    if (!this.ctx) return;
+    const o = this.out(0, 0.5);
+    this.tone(o, 523, 523, 0.18, 0.09, 'sine');
+    this.tone(o, 784, 784, 0.26, 0.07, 'sine', 0.08);
+  }
   death(): void {
     if (!this.ctx) return;
     const o = this.out(0, 1);
